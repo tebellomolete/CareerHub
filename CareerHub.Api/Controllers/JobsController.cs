@@ -2,6 +2,8 @@ namespace CareerHub.Api.Controllers;
 
 using Microsoft.AspNetCore.Mvc;
 using CareerHub.Api.Data;
+using CareerHub.Api.DTOs;
+using CareerHub.Api.Models;
 
 [ApiController]
 [Route("jobs")]
@@ -15,22 +17,96 @@ public class JobsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetJobs()
+    public async Task<IActionResult> GetAllJobs()
     {
         var jobs = await _jobStore.GetAllJobsAsync();
-        return Ok(jobs);
+        return Ok(jobs.Select(JobResponse.FromListing));
     }
 
-    [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetJob(Guid id)
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetJobById(Guid id)
     {
         var job = await _jobStore.GetJobByIdAsync(id);
+        if (job == null) return NotFound();
         
-        if (job == null)
+        return Ok(JobResponse.FromListing(job));
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> CreateJob(CreateJobRequest request)
+    {
+        var allJobs = await _jobStore.GetAllJobsAsync();
+        
+        // Idempotency check: Case-insensitive duplicate check
+        bool isDuplicate = allJobs.Any(j => 
+            j.Title.Equals(request.Title, StringComparison.OrdinalIgnoreCase) &&
+            j.Company.Equals(request.Company, StringComparison.OrdinalIgnoreCase));
+
+        if (isDuplicate)
+        {
+            return Conflict(new ProblemDetails 
+            { 
+                Title = "Conflict",
+                Detail = "A job listing with this exact Title and Company already exists.",
+                Status = StatusCodes.Status409Conflict
+            });
+        }
+
+        var newJob = new JobListing(
+            Guid.NewGuid(),
+            request.Title,
+            request.Description,
+            request.Company,
+            request.Location,
+            request.Type,
+            request.SalaryMin,
+            request.SalaryMax
+        ); // PostedAt and IsActive handled by the record's init properties
+
+        await _jobStore.AddJobAsync(newJob);
+
+        var response = JobResponse.FromListing(newJob);
+        
+        return CreatedAtAction(nameof(GetJobById), new { id = newJob.Id }, response);
+    }
+
+    [HttpPut("{id}")]
+    public async Task<IActionResult> UpdateJob(Guid id, UpdateJobRequest request)
+    {
+        var existingJob = await _jobStore.GetJobByIdAsync(id);
+        if (existingJob == null)
         {
             return NotFound(); 
         }
+
+        // Using 'with' creates a new record, safely keeping PostedAt and IsActive intact
+        var updatedJob = existingJob with
+        {
+            Title = request.Title,
+            Description = request.Description,
+            Company = request.Company,
+            Location = request.Location,
+            Type = request.Type,
+            SalaryMin = request.SalaryMin,
+            SalaryMax = request.SalaryMax
+        };
+
+        await _jobStore.UpdateJobAsync(updatedJob);
+
+        return Ok(JobResponse.FromListing(updatedJob));
+    }
+
+    [HttpDelete("{id}")]
+    public async Task<IActionResult> DeleteJob(Guid id)
+    {
+        var existingJob = await _jobStore.GetJobByIdAsync(id);
+        if (existingJob == null)
+        {
+            return NotFound();
+        }
+
+        await _jobStore.DeleteJobAsync(id);
         
-        return Ok(job); 
+        return NoContent(); 
     }
 }
