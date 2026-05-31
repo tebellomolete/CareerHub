@@ -1,23 +1,51 @@
 # CareerHub API
 
-Welcome to the CareerHub API. This repository contains the backend services for a modern job board application, built using ASP.NET Core.
+Welcome to the CareerHub API. This is the backend code for a job board application. It is built using a tool called ASP.NET Core.
 
-## Assignment 1.2: Design Decisions & Architecture
+---
 
-As part of evolving the read-only CareerHub API into a robust system capable of creating, updating, and deleting job listings, several key architectural decisions were made to enforce data contracts, protect server-owned state, and standardize error handling.
+## Part 1: Design & Decisions
 
-### 1. The `PostedAt` Field and DTO Separation
+Below are the decisions we made when building this application and why we made them.
 
-The `PostedAt` field represents metadata that the system generates at the exact moment a record is processed. It belongs in the `JobResponse` so the React frontend can accurately display how long a listing has been active. However, it is explicitly excluded from the `CreateJobRequest` to maintain the absolute integrity of our data. If clients were allowed to submit this field, a malicious or malfunctioning client could backdate or future-date job listings, making the job board's timeline completely untrustworthy.
+### 1. Recording the Job Post Date (PostedAt)
+When a new job is posted, the system itself should record exactly when it was posted (`PostedAt`). We do not let the user decide this date. If we did, a user could set a fake date (like a date in the past or the future). To prevent this, we created two different models:
+* One model for **creating a job**, which does not let the user set a post date.
+* One model for **displaying a job**, which includes the post date that the system calculated.
 
-### 2. Salary Cross-Field Validation
+### 2. Checking Salary Ranges
+We need to make sure that the maximum salary for a job is not smaller than the minimum salary (since a salary range like $50,000 to $40,000 does not make sense!). 
+We set up rules so that this check happens automatically before our main code even runs. If the salaries are invalid, the system immediately rejects the request with a clear message. This keeps our main code clean and focused on doing its job.
 
-To enforce that `SalaryMax` is strictly greater than `SalaryMin`, I implemented the `IValidatableObject` interface directly on the `CreateJobRequest` (and inherited it in `UpdateJobRequest`). I chose this approach because it hooks seamlessly into the native .NET model binding pipeline. This ensures the cross-field validation triggers automatically alongside the standard Data Annotations (like `[Required]`), immediately returning a 400 Bad Request if it fails. This keeps the controller completely clean and focused solely on handling the HTTP request rather than manual validation logic.
+### 3. Returning Updated Job Data (PUT)
+When a user updates a job listing, we return a "200 OK" response containing the fully updated job details. We do this instead of sending back a blank response.
+This is helpful because our system formats the salary range into a nice, readable text. By sending the updated job back immediately, the frontend app can show the new details right away without having to make a second request to ask the server how the updated job looks.
 
-### 3. PUT Status Code Choice
+### 4. Deleting a Job That is Already Gone (DELETE)
+If someone tries to delete a job using an ID that does not exist in our system, we return a "404 Not Found" error instead of pretending it succeeded.
+This is important when multiple people are using the system at the same time. For example, if two administrators try to delete the exact same job, the first admin will successfully delete it. The second admin needs to know that the job was already gone. Sending a "404" lets them know the job did not exist when they tried to delete it.
 
-For the PUT endpoint, I chose to return a `200 OK` accompanied by the updated `JobResponse` body, rather than a `204 No Content`. Because our API is responsible for mapping the DTO and computing the human-readable `SalaryDisplay` string, returning the updated response allows the client to immediately receive and render these calculated fields. If I had returned a `204`, the frontend would have to fire a secondary GET request just to figure out how the server formatted the newly updated salary data.
+---
 
-### 4. DELETE Behaviour for a Missing ID
+## Part 2: Error Handling & Logging Updates
 
-If a client sends a DELETE request for a UUID that does not exist in the store, the API returns a `404 Not Found`. On a platform like a job board, there is a real possibility of concurrent actions—for example, two administrators might attempt to delete an expired listing at the exact same time. If the API returned a `204 No Content` for a missing ID, the second admin would falsely assume their specific command was the one that successfully executed the deletion. A 404 explicitly and correctly informs them that the resource was already gone before their request arrived.
+We have updated the project to handle errors and write log messages in a cleaner, more professional way.
+
+### 1. Keeping Controllers Thin (Controller Thinning)
+Instead of writing code in our controller to manually return error responses (like `return NotFound()`), we now just throw custom errors (like `throw new JobNotFoundException()`).
+
+**Why this is better:**
+* **Simpler Code (The Happy Path)**: The controller code only has to focus on what happens when things go right. It does not get cluttered with code for when things go wrong.
+* **One Place for Errors**: We have a single, central error handler (called middleware) that watches for these custom errors. When an error is thrown, this handler catches it and decides how to format the message and what status code to send back to the user.
+* **Easier to Change**: If we ever want to change how we show error messages to our users, we only have to change the code in one place (the central error handler) instead of updating every controller in our application.
+
+### 2. Structured Logging (Serilog vs Console.WriteLine)
+Instead of using standard print commands (like `Console.WriteLine`) to print simple text lines to the screen, we use a library called Serilog to create **Structured Logs** (formatted as organized data, like JSON).
+
+**Why this is better:**
+* **Searchable Logs**: Plain text prints are easy for a human to read on their own computer, but in a real production environment, millions of lines of logs are written every day. It is very hard to search through raw text.
+* **Computer-Friendly**: Structured logs are saved like a database. A computer program can easily search, filter, and analyze them. For example, you can quickly search for:
+  - All errors that happened in the last 15 minutes.
+  - Every action taken by a specific user.
+  - How long it took, on average, for a specific page to load.
+* **Rich Details**: Serilog automatically includes extra information with every log, such as the exact time, the web address being requested, and the type of device the user was using, without us having to write extra code for it.
