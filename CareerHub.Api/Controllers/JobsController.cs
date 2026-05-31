@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using CareerHub.Api.Data;
 using CareerHub.Api.DTOs;
 using CareerHub.Api.Models;
+using CareerHub.Api.Exceptions;
 
 [ApiController]
 [Route("jobs")]
@@ -27,7 +28,10 @@ public class JobsController : ControllerBase
     public async Task<IActionResult> GetJobById(Guid id)
     {
         var job = await _jobStore.GetJobByIdAsync(id);
-        if (job == null) return NotFound();
+        if (job == null)
+        {
+            throw new JobNotFoundException(id);
+        }
         
         return Ok(JobResponse.FromListing(job));
     }
@@ -44,12 +48,7 @@ public class JobsController : ControllerBase
 
         if (isDuplicate)
         {
-            return Conflict(new ProblemDetails 
-            { 
-                Title = "Conflict",
-                Detail = "A job listing with this exact Title and Company already exists.",
-                Status = StatusCodes.Status409Conflict
-            });
+            throw new DuplicateJobListingException(request.Company, request.Title);
         }
 
         var newJob = new JobListing(
@@ -76,7 +75,7 @@ public class JobsController : ControllerBase
         var existingJob = await _jobStore.GetJobByIdAsync(id);
         if (existingJob == null)
         {
-            return NotFound(); 
+            throw new JobNotFoundException(id);
         }
 
         // Using 'with' creates a new record, safely keeping PostedAt and IsActive intact
@@ -102,7 +101,7 @@ public class JobsController : ControllerBase
         var existingJob = await _jobStore.GetJobByIdAsync(id);
         if (existingJob == null)
         {
-            return NotFound();
+            throw new JobNotFoundException(id);
         }
 
         await _jobStore.DeleteJobAsync(id);
