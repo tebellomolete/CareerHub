@@ -3,33 +3,32 @@ namespace CareerHub.Api.DTOs;
 using System.ComponentModel.DataAnnotations;
 using CareerHub.Api.Models;
 
-public record CreateJobRequest(
-    [property: Required]
-    [property: StringLength(120, MinimumLength = 5)] 
-    string Title,
-
-    [property: Required]
-    [property: StringLength(80, MinimumLength = 2)] 
-    string Company,
-
-    [property: Required] 
-    string Location,
-
-    [property: Required]
-    [property: MinLength(20)] 
-    string Description,
-
-    [property: Required] 
-    JobType Type,
-
-    [property: Range(1, int.MaxValue, ErrorMessage = "Salary minimum must be greater than zero.")] 
-    int? SalaryMin = null,
-
-    [property: Range(1, int.MaxValue, ErrorMessage = "Salary maximum must be greater than zero.")] 
-    int? SalaryMax = null
-) : IValidatableObject
+public record CreateJobRequest : IValidatableObject
 {
-    // The cross-field validation works exactly the same in a record
+    [Required]
+    [StringLength(120, MinimumLength = 5)] 
+    public string Title { get; init; } = default!;
+
+    [Required]
+    [StringLength(80, MinimumLength = 2)] 
+    public string Company { get; init; } = default!;
+
+    [Required] 
+    public string Location { get; init; } = default!;
+
+    [Required]
+    [MinLength(20)] 
+    public string Description { get; init; } = default!;
+
+    [Required] 
+    public JobType Type { get; init; }
+
+    [Range(1, int.MaxValue, ErrorMessage = "Salary minimum must be greater than zero.")] 
+    public int? SalaryMin { get; init; } = null;
+
+    [Range(1, int.MaxValue, ErrorMessage = "Salary maximum must be greater than zero.")] 
+    public int? SalaryMax { get; init; } = null;
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if (SalaryMin.HasValue && SalaryMax.HasValue && SalaryMax <= SalaryMin)
