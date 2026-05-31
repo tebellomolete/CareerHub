@@ -1,48 +1,70 @@
 using Scalar.AspNetCore;
+using Serilog;
+using CareerHub.Api.Middleware;
 using CareerHub.Api.Data;
 using System.Text.Json.Serialization;
-using CareerHub.Api.Middleware;
 
-var builder = WebApplication.CreateBuilder(args);
-
-// 1. Enable Controllers
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });
-
-// 2. Add built-in OpenAPI generation
-builder.Services.AddOpenApi();
-
-// 3. Register our data store
-builder.Services.AddSingleton<JobStore>();
-
-
-// Registers the internal services needed to standardize error responses into the RFC 7807 Problem Details JSON format.
-builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
-builder.Services.AddProblemDetails();
-
-var app = builder.Build();
-
-
-// Catches any unhandled exceptions crashing the app and formats them safely as a 500 Internal Server Error Problem Details response.
-app.UseExceptionHandler();
-
-// Intercepts empty HTTP error responses (like a 404 Not Found from a bad route) and injects a formatted Problem Details JSON body before sending it to the client.
-app.UseStatusCodePages();
-
-if (app.Environment.IsDevelopment())
+// 
+//════════════════════════════════════════════════════ 
+// Bootstrap Serilog before the host is built. 
+// This ensures even startup exceptions are logged. 
+// 
+//════════════════════════════════════════════════════ 
+Log.Logger = new LoggerConfiguration()
+.WriteTo.Console()
+.CreateLogger();
+try
 {
+    Log.Information("Starting up the CareerHub API...");
+    var builder = WebApplication.CreateBuilder(args);
+    // Replace the default .NET logger with Serilog 
+    builder.Host.UseSerilog();
+    // 
+    //════════════════════════════════════════════════════ 
+    // BUILDER — Register services 
+    // 
+    //════════════════════════════════════════════════════ 
+    builder.Services.AddControllers()
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        });
+    builder.Services.AddOpenApi();
+    builder.Services.AddSingleton<JobStore>();
+    builder.Services.AddExceptionHandler<GlobalExceptionHandler>(); // Day 3 — typed handler
+    builder.Services.AddProblemDetails();
+    // 
+    // Day 2 — standardised errors 
+    //════════════════════════════════════════════════════ 
+    // TRANSITION — Build() seals the DI container. 
+    // Nothing can be registered after this line. 
+    // 
+    //════════════════════════════════════════════════════ 
+    var app = builder.Build();
+    // 
+    //════════════════════════════════════════════════════ 
+    // PIPELINE — Configure the middleware chain. 
+    // Order matters. Top to bottom. 
+    // 
+    //════════════════════════════════════════════════════ 
+    app.UseSerilogRequestLogging(); // Logs every HTTP request + final response automatically 
+    app.UseExceptionHandler();  // Activates GlobalExceptionHandler — catches all thrown exceptions 
+    app.UseStatusCodePages();   // Fills empty 4xx/5xx responses with Problem Details body 
+    if (app.Environment.IsDevelopment())
+    {
+    }
     app.MapOpenApi();
-
-    // 4. Map the interactive Scalar UI
-    app.MapScalarApiReference();
+    // Serves /openapi/v1.json 
+    app.MapScalarApiReference();  // Serves the Scalar UI at /scalar/v1 
+    app.MapControllers();  // Activates attribute routing for all [ApiController] classes 
+    app.Run();
+}
+catch (Exception ex)
+{
+    Log.Fatal(ex, "Application failed to start correctly.");
 }
 
-// 5. Map Controller routes
-app.MapControllers();
-
-
-
-app.Run();
+finally
+{
+    Log.CloseAndFlush(); //Ensure all buffered log entries are flushed before application exit. 
+}
