@@ -1,4 +1,4 @@
-# CareerHub API
+c# CareerHub API
 
 Welcome to the CareerHub API. This is the backend code for a job board application. It is built using a tool called ASP.NET Core.
 
