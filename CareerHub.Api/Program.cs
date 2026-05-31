@@ -1,6 +1,7 @@
 using Scalar.AspNetCore;
 using CareerHub.Api.Data;
 using System.Text.Json.Serialization;
+using CareerHub.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,13 +18,14 @@ builder.Services.AddOpenApi();
 // 3. Register our data store
 builder.Services.AddSingleton<JobStore>();
 
-// --- PART 5: Global Error Handling Services ---
+
 // Registers the internal services needed to standardize error responses into the RFC 7807 Problem Details JSON format.
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
-// --- PART 5: Global Error Handling Middleware ---
+
 // Catches any unhandled exceptions crashing the app and formats them safely as a 500 Internal Server Error Problem Details response.
 app.UseExceptionHandler();
 
