@@ -3,6 +3,10 @@ using Serilog;
 using CareerHub.Api.Middleware;
 using CareerHub.Api.Data;
 using System.Text.Json.Serialization;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+
 
 // 
 //════════════════════════════════════════════════════ 
@@ -33,6 +37,42 @@ try
     builder.Services.AddSingleton<JobStore>();
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>(); // Day 3 — typed handler
     builder.Services.AddProblemDetails();
+
+    // Register CORS policy
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("AllowNextJs", policy =>
+        {
+            policy.WithOrigins("http://localhost:3000")
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        });
+    });
+
+    // Register JWT Authentication
+    var jwtSecret = builder.Configuration["Jwt:Secret"] ?? throw new InvalidOperationException("JWT Secret is not configured.");
+    var key = Encoding.UTF8.GetBytes(jwtSecret);
+
+    builder.Services.AddAuthentication(options =>
+    {
+        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    })
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(key)
+        };
+    });
+
+    // Register Authorization service
+    builder.Services.AddAuthorization();
+
     // 
     // Day 2 — standardised errors 
     //════════════════════════════════════════════════════ 
@@ -48,8 +88,11 @@ try
     // 
     //════════════════════════════════════════════════════ 
     app.UseSerilogRequestLogging(); // Logs every HTTP request + final response automatically 
+    app.UseCors("AllowNextJs");
     app.UseExceptionHandler();  // Activates GlobalExceptionHandler — catches all thrown exceptions 
     app.UseStatusCodePages();   // Fills empty 4xx/5xx responses with Problem Details body 
+    app.UseAuthentication();
+    app.UseAuthorization();
     if (app.Environment.IsDevelopment())
     {
     }

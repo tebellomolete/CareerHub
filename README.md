@@ -49,3 +49,25 @@ Instead of using standard print commands (like `Console.WriteLine`) to print sim
   - Every action taken by a specific user.
   - How long it took, on average, for a specific page to load.
 * **Rich Details**: Serilog automatically includes extra information with every log, such as the exact time, the web address being requested, and the type of device the user was using, without us having to write extra code for it.
+
+---
+
+## Part 3: Authentication & Authorization
+
+### 1. Stateless Authentication (Session-based vs JWT-based)
+* **Session-Based Authentication (Stateful)**: In a traditional session-based system, the server authenticates the user and creates a session record stored in memory or a database (e.g., Redis). It sends a session ID back to the client, usually inside a cookie. On subsequent requests, the client sends this cookie, and the server must look up the session ID in its data store to verify the user.
+* **JWT-Based Authentication (Stateless)**: In JWT-based authentication, the server generates a JSON Web Token containing the user's identity and claims (such as their username and roles), signs it digitally with a secret key, and sends it to the client. The client stores it and sends it in the `Authorization: Bearer <token>` header. The server verifies the token's signature using its secret key without querying any database or storing any session state on the server.
+* **Why Statelessness Matters for Horizontal Scaling**: In a horizontally scaled system, multiple instances of the API run behind a load balancer. If we use stateful session-based authentication, a user's request might hit Server A (where their session is stored) but the next request might go to Server B (which knows nothing about the session), requiring sticky sessions or a shared session store (Redis). With stateless JWTs, any server instance can independently verify the token using the secret key. This simplifies scaling, reduces database load, and eliminates single points of failure.
+
+### 2. 401 Unauthorized vs 403 Forbidden
+* **401 Unauthorized**: This status code means the user is not authenticated. The server doesn't know who they are, or the authentication credentials provided (e.g., token) are invalid or missing.
+  - **Where it is produced**: This is produced by the **Authentication Middleware** (`UseAuthentication()`). If the token is invalid, expired, or missing when a secure endpoint is requested, the authentication handler challenges the request and halts the pipeline, returning a `401 Unauthorized` before reaching the authorization checks or the controller.
+* **403 Forbidden**: This status code means the user is authenticated (we know who they are), but they do not have the required permissions or roles to access the resource.
+  - **Where it is produced**: This is produced by the **Authorization Middleware** (`UseAuthorization()`). Once the authentication middleware successfully identifies the user, the authorization middleware checks the user's claims against the endpoint's requirements (such as `[Authorize(Roles = "Employer")]`). If the user has a valid token but lacks the `"Employer"` role, the middleware stops the request and returns a `403 Forbidden`.
+
+### 3. Token Storage and Security Risks
+* **The Risk of `localStorage`**: Storing a JWT in `localStorage` or `sessionStorage` makes it vulnerable to Cross-Site Scripting (XSS) attacks. If an attacker manages to inject a malicious script (e.g., via a compromised third-party library, user-submitted HTML, or CDN), they can access the token using `window.localStorage.getItem(...)` and steal it.
+* **Safer Alternatives**:
+  - **HttpOnly Cookies**: Store the JWT in an `HttpOnly` and `Secure` cookie. Browsers automatically attach cookies to requests but prevent JavaScript from reading them (mitigating XSS theft). Use the `SameSite=Strict` or `SameSite=Lax` attribute to protect against Cross-Site Request Forgery (CSRF).
+  - **In-Memory Storage**: Store the JWT in application memory (e.g., in a plain JavaScript variable). When the tab is closed or refreshed, the token is cleared. To keep the user logged in, use a silent refresh mechanism using an HttpOnly refresh token.
+

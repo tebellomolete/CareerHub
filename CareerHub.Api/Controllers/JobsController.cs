@@ -1,13 +1,14 @@
 namespace CareerHub.Api.Controllers;
 
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 using CareerHub.Api.Data;
 using CareerHub.Api.DTOs;
 using CareerHub.Api.Models;
 using CareerHub.Api.Exceptions;
 
 [ApiController]
-[Route("jobs")]
+[Route("api/jobs")]
 public class JobsController : ControllerBase
 {
     private readonly JobStore _jobStore;
@@ -37,6 +38,7 @@ public class JobsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Employer")]
     public async Task<IActionResult> CreateJob(CreateJobRequest request)
     {
         var allJobs = await _jobStore.GetAllJobsAsync();
@@ -70,6 +72,7 @@ public class JobsController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Employer")]
     public async Task<IActionResult> UpdateJob(Guid id, UpdateJobRequest request)
     {
         var existingJob = await _jobStore.GetJobByIdAsync(id);
@@ -96,6 +99,7 @@ public class JobsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Employer")]
     public async Task<IActionResult> DeleteJob(Guid id)
     {
         var existingJob = await _jobStore.GetJobByIdAsync(id);
