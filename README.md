@@ -71,3 +71,17 @@ Instead of using standard print commands (like `Console.WriteLine`) to print sim
   - **HttpOnly Cookies**: Store the JWT in an `HttpOnly` and `Secure` cookie. Browsers automatically attach cookies to requests but prevent JavaScript from reading them (mitigating XSS theft). Use the `SameSite=Strict` or `SameSite=Lax` attribute to protect against Cross-Site Request Forgery (CSRF).
   - **In-Memory Storage**: Store the JWT in application memory (e.g., in a plain JavaScript variable). When the tab is closed or refreshed, the token is cleared. To keep the user logged in, use a silent refresh mechanism using an HttpOnly refresh token.
 
+---
+
+## Part 4: Database Persistence with EF Core
+
+### 1. The Change Tracker
+EF Core's change tracker watches entities for modifications. When we load a `JobListing` using `FindAsync`, EF Core takes a snapshot of its state. When we modify its properties, the change tracker detects the differences. `SaveChangesAsync()` is called only once at the end of the operation because it allows EF Core to batch all pending changes (inserts, updates, deletes) into a single, optimized database transaction, rather than executing a separate query for every single property change. This significantly improves performance and ensures data consistency.
+
+### 2. Migrations as Version Control
+The generated migration file must be committed to source control because it represents a specific, versioned state of the database schema that matches the application code at that point in time. It allows all developers to have a consistent database schema. 
+If a teammate pulls code that references a migration they have not applied locally, their application code (which might depend on a new column or table) will fail when it tries to query their outdated local database. They must run `dotnet ef database update` to sync their schema with the new code.
+
+### 3. Connection String Security
+The connection string belongs in `appsettings.Development.json` and not `appsettings.json` because `appsettings.json` is typically committed to source control and distributed. Putting a production connection string (which contains passwords) in version control is a major security risk. `appsettings.Development.json` is often meant only for local, low-risk database credentials.
+A safer alternative for a production deployment is to inject the connection string securely using Environment Variables or a dedicated secrets manager (like AWS Secrets Manager, Azure Key Vault, or HashiCorp Vault).

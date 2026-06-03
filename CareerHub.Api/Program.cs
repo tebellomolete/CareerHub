@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.EntityFrameworkCore;
 
 
 // 
@@ -34,7 +35,11 @@ try
             options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
         });
     builder.Services.AddOpenApi();
-    builder.Services.AddSingleton<JobStore>();
+
+    var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    builder.Services.AddDbContext<CareerHubDbContext>(options =>
+        options.UseNpgsql(connectionString));
+
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>(); // Day 3 — typed handler
     builder.Services.AddProblemDetails();
 

@@ -2,6 +2,7 @@ namespace CareerHub.Api.Controllers;
 
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.EntityFrameworkCore;
 using CareerHub.Api.Data;
 using CareerHub.Api.DTOs;
 using CareerHub.Api.Models;
@@ -11,24 +12,24 @@ using CareerHub.Api.Exceptions;
 [Route("api/jobs")]
 public class JobsController : ControllerBase
 {
-    private readonly JobStore _jobStore;
+    private readonly CareerHubDbContext _context;
 
-    public JobsController(JobStore jobStore)
+    public JobsController(CareerHubDbContext context)
     {
-        _jobStore = jobStore;
+        _context = context;
     }
 
     [HttpGet]
     public async Task<IActionResult> GetAllJobs()
     {
-        var jobs = await _jobStore.GetAllJobsAsync();
+        var jobs = await _context.JobListings.ToListAsync();
         return Ok(jobs.Select(JobResponse.FromListing));
     }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetJobById(Guid id)
     {
-        var job = await _jobStore.GetJobByIdAsync(id);
+        var job = await _context.JobListings.FindAsync(id);
         if (job == null)
         {
             throw new JobNotFoundException(id);
@@ -41,30 +42,30 @@ public class JobsController : ControllerBase
     [Authorize(Roles = "Employer")]
     public async Task<IActionResult> CreateJob(CreateJobRequest request)
     {
-        var allJobs = await _jobStore.GetAllJobsAsync();
-        
-        // Idempotency check: Case-insensitive duplicate check
-        bool isDuplicate = allJobs.Any(j => 
-            j.Title.Equals(request.Title, StringComparison.OrdinalIgnoreCase) &&
-            j.Company.Equals(request.Company, StringComparison.OrdinalIgnoreCase));
+        // Idempotency check: Case-insensitive duplicate check in database
+        bool isDuplicate = await _context.JobListings.AnyAsync(j => 
+            j.Title.ToLower() == request.Title.ToLower() &&
+            j.Company.ToLower() == request.Company.ToLower());
 
         if (isDuplicate)
         {
             throw new DuplicateJobListingException(request.Company, request.Title);
         }
 
-        var newJob = new JobListing(
-            Guid.NewGuid(),
-            request.Title,
-            request.Description,
-            request.Company,
-            request.Location,
-            request.Type,
-            request.SalaryMin,
-            request.SalaryMax
-        ); // PostedAt and IsActive handled by the record's init properties
+        var newJob = new JobListing
+        {
+            Id = Guid.NewGuid(),
+            Title = request.Title,
+            Description = request.Description,
+            Company = request.Company,
+            Location = request.Location,
+            Type = request.Type,
+            SalaryMin = request.SalaryMin,
+            SalaryMax = request.SalaryMax
+        }; // PostedAt and IsActive handled by defaults
 
-        await _jobStore.AddJobAsync(newJob);
+        _context.JobListings.Add(newJob);
+        await _context.SaveChangesAsync();
 
         var response = JobResponse.FromListing(newJob);
         
@@ -75,40 +76,37 @@ public class JobsController : ControllerBase
     [Authorize(Roles = "Employer")]
     public async Task<IActionResult> UpdateJob(Guid id, UpdateJobRequest request)
     {
-        var existingJob = await _jobStore.GetJobByIdAsync(id);
+        var existingJob = await _context.JobListings.FindAsync(id);
         if (existingJob == null)
         {
             throw new JobNotFoundException(id);
         }
 
-        // Using 'with' creates a new record, safely keeping PostedAt and IsActive intact
-        var updatedJob = existingJob with
-        {
-            Title = request.Title,
-            Description = request.Description,
-            Company = request.Company,
-            Location = request.Location,
-            Type = request.Type,
-            SalaryMin = request.SalaryMin,
-            SalaryMax = request.SalaryMax
-        };
+        existingJob.Title = request.Title;
+        existingJob.Description = request.Description;
+        existingJob.Company = request.Company;
+        existingJob.Location = request.Location;
+        existingJob.Type = request.Type;
+        existingJob.SalaryMin = request.SalaryMin;
+        existingJob.SalaryMax = request.SalaryMax;
 
-        await _jobStore.UpdateJobAsync(updatedJob);
+        await _context.SaveChangesAsync();
 
-        return Ok(JobResponse.FromListing(updatedJob));
+        return Ok(JobResponse.FromListing(existingJob));
     }
 
     [HttpDelete("{id}")]
     [Authorize(Roles = "Employer")]
     public async Task<IActionResult> DeleteJob(Guid id)
     {
-        var existingJob = await _jobStore.GetJobByIdAsync(id);
+        var existingJob = await _context.JobListings.FindAsync(id);
         if (existingJob == null)
         {
             throw new JobNotFoundException(id);
         }
 
-        await _jobStore.DeleteJobAsync(id);
+        _context.JobListings.Remove(existingJob);
+        await _context.SaveChangesAsync();
         
         return NoContent(); 
     }
