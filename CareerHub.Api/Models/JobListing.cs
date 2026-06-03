@@ -1,18 +1,17 @@
 namespace CareerHub.Api.Models;
 
-public record JobListing
-(
-    Guid Id,
-    string Title,
-    string Description,
-    string Company,
-    string Location,
-    JobType Type,
-    int? SalaryMin = null,
-    int? SalaryMax = null
-)
+public class JobListing
 {
+    public Guid Id { get; set; }
+    public string Title { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public string Company { get; set; } = string.Empty;
+    public string Location { get; set; } = string.Empty;
+    public JobType Type { get; set; }
+    public int? SalaryMin { get; set; }
+    public int? SalaryMax { get; set; }
+
     // Server-owned fields initialized automatically upon creation
-    public DateTime PostedAt { get; init; } = DateTime.UtcNow;
-    public bool IsActive { get; init; } = true;
+    public DateTime PostedAt { get; set; } = DateTime.UtcNow;
+    public bool IsActive { get; set; } = true;
 }
