@@ -22,34 +22,107 @@ public class JobsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAllJobs()
     {
-        var jobs = await _context.JobListings.ToListAsync();
-        return Ok(jobs.Select(JobResponse.FromListing));
+        var jobsData = await _context.JobListings
+            .AsNoTracking()
+            .Select(j => new 
+            {
+                j.Id,
+                j.Title,
+                CompanyName = j.Company.Name,
+                j.Location,
+                j.Description,
+                j.Type,
+                j.PostedAt,
+                j.SalaryMin,
+                j.SalaryMax,
+                ApplicationCount = j.Applications.Count
+            })
+            .ToListAsync();
+
+        var response = jobsData.Select(j => 
+        {
+            string salaryDisplay = "Salary not specified";
+            if (j.SalaryMin.HasValue && j.SalaryMax.HasValue)
+                salaryDisplay = $"R{j.SalaryMin:N0} - R{j.SalaryMax:N0}/month";
+            else if (j.SalaryMin.HasValue)
+                salaryDisplay = $"From R{j.SalaryMin:N0}/month";
+
+            return new JobResponse(
+                j.Id,
+                j.Title,
+                j.CompanyName,
+                j.Location,
+                j.Description,
+                j.Type,
+                j.PostedAt,
+                salaryDisplay,
+                j.ApplicationCount
+            );
+        });
+
+        return Ok(response);
     }
 
     [HttpGet("{id}")]
     public async Task<IActionResult> GetJobById(Guid id)
     {
-        var job = await _context.JobListings.FindAsync(id);
-        if (job == null)
+        var jobData = await _context.JobListings
+            .AsNoTracking()
+            .Where(j => j.Id == id)
+            .Select(j => new 
+            {
+                j.Id,
+                j.Title,
+                CompanyName = j.Company.Name,
+                j.Location,
+                j.Description,
+                j.Type,
+                j.PostedAt,
+                j.SalaryMin,
+                j.SalaryMax,
+                ApplicationCount = j.Applications.Count
+            })
+            .FirstOrDefaultAsync();
+
+        if (jobData == null)
         {
             throw new JobNotFoundException(id);
         }
         
-        return Ok(JobResponse.FromListing(job));
+        string salaryDisplay = "Salary not specified";
+        if (jobData.SalaryMin.HasValue && jobData.SalaryMax.HasValue)
+            salaryDisplay = $"R{jobData.SalaryMin:N0} - R{jobData.SalaryMax:N0}/month";
+        else if (jobData.SalaryMin.HasValue)
+            salaryDisplay = $"From R{jobData.SalaryMin:N0}/month";
+
+        var response = new JobResponse(
+            jobData.Id,
+            jobData.Title,
+            jobData.CompanyName,
+            jobData.Location,
+            jobData.Description,
+            jobData.Type,
+            jobData.PostedAt,
+            salaryDisplay,
+            jobData.ApplicationCount
+        );
+
+        return Ok(response);
     }
 
     [HttpPost]
     [Authorize(Roles = "Employer")]
     public async Task<IActionResult> CreateJob(CreateJobRequest request)
     {
-        // Idempotency check: Case-insensitive duplicate check in database
         bool isDuplicate = await _context.JobListings.AnyAsync(j => 
             j.Title.ToLower() == request.Title.ToLower() &&
-            j.Company.ToLower() == request.Company.ToLower());
+            j.CompanyId == request.CompanyId);
 
         if (isDuplicate)
         {
-            throw new DuplicateJobListingException(request.Company, request.Title);
+            var company = await _context.Companies.FindAsync(request.CompanyId);
+            string companyName = company?.Name ?? request.CompanyId.ToString();
+            throw new DuplicateJobListingException(companyName, request.Title);
         }
 
         var newJob = new JobListing
@@ -57,16 +130,18 @@ public class JobsController : ControllerBase
             Id = Guid.NewGuid(),
             Title = request.Title,
             Description = request.Description,
-            Company = request.Company,
+            CompanyId = request.CompanyId,
             Location = request.Location,
             Type = request.Type,
             SalaryMin = request.SalaryMin,
             SalaryMax = request.SalaryMax
-        }; // PostedAt and IsActive handled by defaults
+        };
 
         _context.JobListings.Add(newJob);
         await _context.SaveChangesAsync();
 
+        // For the response, we might need the company name
+        await _context.Entry(newJob).Reference(j => j.Company).LoadAsync();
         var response = JobResponse.FromListing(newJob);
         
         return CreatedAtAction(nameof(GetJobById), new { id = newJob.Id }, response);
@@ -84,7 +159,7 @@ public class JobsController : ControllerBase
 
         existingJob.Title = request.Title;
         existingJob.Description = request.Description;
-        existingJob.Company = request.Company;
+        existingJob.CompanyId = request.CompanyId;
         existingJob.Location = request.Location;
         existingJob.Type = request.Type;
         existingJob.SalaryMin = request.SalaryMin;
@@ -92,6 +167,7 @@ public class JobsController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        await _context.Entry(existingJob).Reference(j => j.Company).LoadAsync();
         return Ok(JobResponse.FromListing(existingJob));
     }
 

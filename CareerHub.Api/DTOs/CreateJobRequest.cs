@@ -10,8 +10,7 @@ public record CreateJobRequest : IValidatableObject
     public string Title { get; init; } = default!;
 
     [Required]
-    [StringLength(80, MinimumLength = 2)] 
-    public string Company { get; init; } = default!;
+    public Guid CompanyId { get; init; }
 
     [Required] 
     public string Location { get; init; } = default!;

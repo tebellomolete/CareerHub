@@ -5,12 +5,13 @@ using CareerHub.Api.Models;
 public record JobResponse(
     Guid Id,
     string Title,
-    string Company,
+    string CompanyName,
     string Location,
     string Description,
     JobType Type,
     DateTime PostedAt,
-    string SalaryDisplay
+    string SalaryDisplay,
+    int ApplicationCount
 )
 {
     // Helper method to handle mapping and the SalaryDisplay string
@@ -30,12 +31,13 @@ public record JobResponse(
         return new JobResponse(
             job.Id,
             job.Title,
-            job.Company,
+            job.Company != null ? job.Company.Name : string.Empty,
             job.Location,
             job.Description,
             job.Type,
             job.PostedAt,
-            salaryDisplay
+            salaryDisplay,
+            job.Applications?.Count ?? 0
         );
     }
 }
