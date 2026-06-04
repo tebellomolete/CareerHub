@@ -22,8 +22,16 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public IActionResult Login([FromBody] LoginRequest request)
     {
-        // Validate the credentials against hardcoded pair
-        if (request.Username != "employer" || request.Password != "password123")
+        string role;
+        if (request.Username == "employer" && request.Password == "password123")
+        {
+            role = "Employer";
+        }
+        else if (request.Username == "applicant" && request.Password == "password123")
+        {
+            role = "Applicant";
+        }
+        else
         {
             return Unauthorized();
         }
@@ -38,12 +46,10 @@ public class AuthController : ControllerBase
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
-        // Build JWT with subject (sub) and role claims
-        // The role claim is set to "Employer" (or modified temporarily for testing)
         var claims = new[]
         {
             new Claim(JwtRegisteredClaimNames.Sub, request.Username),
-            new Claim(ClaimTypes.Role, "Employer") // Change to "User" temporarily for Part 5 verification
+            new Claim(ClaimTypes.Role, role)
         };
 
         var token = new JwtSecurityToken(

@@ -80,7 +80,12 @@ public class JobsController : ControllerBase
                 j.PostedAt,
                 j.SalaryMin,
                 j.SalaryMax,
-                ApplicationCount = j.Applications.Count
+                ApplicationCount = j.Applications.Count,
+                Applications = j.Applications.Select(a => new ApplicationResponse(
+                    a.Applicant.Name,
+                    a.SubmittedAt,
+                    a.Status
+                )).ToList()
             })
             .FirstOrDefaultAsync();
 
@@ -95,7 +100,7 @@ public class JobsController : ControllerBase
         else if (jobData.SalaryMin.HasValue)
             salaryDisplay = $"From R{jobData.SalaryMin:N0}/month";
 
-        var response = new JobResponse(
+        var response = new JobDetailResponse(
             jobData.Id,
             jobData.Title,
             jobData.CompanyName,
@@ -104,10 +109,57 @@ public class JobsController : ControllerBase
             jobData.Type,
             jobData.PostedAt,
             salaryDisplay,
-            jobData.ApplicationCount
+            jobData.ApplicationCount,
+            jobData.Applications
         );
 
         return Ok(response);
+    }
+
+    [HttpPost("{id}/applications")]
+    [Authorize(Roles = "Applicant")]
+    public async Task<IActionResult> SubmitApplication(Guid id, SubmitApplicationRequest request)
+    {
+        var jobListing = await _context.JobListings.FindAsync(id);
+        if (jobListing == null)
+        {
+            throw new JobNotFoundException(id);
+        }
+
+        // We lookup the applicant by email, or create a new one if it doesn't exist
+        var applicant = await _context.Applicants.FirstOrDefaultAsync(a => a.Email == request.ApplicantEmail);
+        if (applicant == null)
+        {
+            applicant = new Applicant
+            {
+                Id = Guid.NewGuid(),
+                Name = request.ApplicantName,
+                Email = request.ApplicantEmail
+            };
+            _context.Applicants.Add(applicant);
+        }
+
+        bool alreadyApplied = await _context.Applications
+            .AnyAsync(a => a.ApplicantId == applicant.Id && a.JobListingId == id);
+
+        if (alreadyApplied)
+        {
+            return BadRequest(new { Message = "You have already applied for this job listing." });
+        }
+
+        var application = new Application
+        {
+            ApplicantId = applicant.Id,
+            Applicant = applicant,
+            JobListingId = id,
+            Status = ApplicationStatus.Submitted,
+            SubmittedAt = DateTime.UtcNow
+        };
+
+        _context.Applications.Add(application);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { Message = "Application submitted successfully." });
     }
 
     [HttpPost]
