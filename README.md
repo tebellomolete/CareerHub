@@ -85,3 +85,29 @@ If a teammate pulls code that references a migration they have not applied local
 ### 3. Connection String Security
 The connection string belongs in `appsettings.Development.json` and not `appsettings.json` because `appsettings.json` is typically committed to source control and distributed. Putting a production connection string (which contains passwords) in version control is a major security risk. `appsettings.Development.json` is often meant only for local, low-risk database credentials.
 A safer alternative for a production deployment is to inject the connection string securely using Environment Variables or a dedicated secrets manager (like AWS Secrets Manager, Azure Key Vault, or HashiCorp Vault).
+
+---
+
+## Part 5: Advanced EF Core & Query Optimization
+
+### 1. Relationship Design Decisions
+**Delete Behaviour (Company → JobListing):**
+We chose to configure the relationship between a `Company` and a `JobListing` using `DeleteBehavior.Restrict`. This means that if a company is deleted, its associated job listings will not be automatically deleted, and the database will prevent the deletion of the company if it still has active job listings. This is crucial for maintaining historical integrity; job listings represent historical data that users (applicants) might have already applied to. Deleting a company and cascading that deletion to job listings would orphaned applications and cause data loss. 
+
+**Application Entity as an Explicit Join Table:**
+A many-to-many relationship can sometimes be represented by a hidden join table (an implicit join table that EF Core manages for you). However, the `Application` relationship cannot be a hidden join table because it represents a *domain concept* in its own right. It carries its own unique payload data, such as `SubmittedAt` (when the application was submitted) and `Status` (the current state of the application in the hiring workflow). An implicit join table can only hold the two foreign keys, meaning it has no place to store this additional, crucial information. Therefore, an explicit `Application` entity is absolutely necessary.
+
+### 2. N+1 Query Problem
+**Observation:**
+Before fixing the loading strategy, when calling `GET /api/jobs` and requesting a list of job listings that belong to different companies, the console logged multiple SQL queries: one initial query to fetch all the job listings, and then *N* additional queries (one for each job listing) to fetch the associated company data or application counts. 
+After fixing the query using a `.Select()` projection, exactly **one** SQL statement was generated. This single query efficiently joined the necessary tables and aggregated the data directly in the database.
+
+**Why it's dangerous in production:**
+While an N+1 issue might work correctly and quickly in a local development environment (because the database is usually on the same machine and has very little data), it becomes a massive performance bottleneck in production. In production, each database query incurs network latency. If an endpoint returns 1,000 job listings, an N+1 issue would result in 1,001 separate network round-trips to the database. This rapidly exhausts database connection pools, spikes server CPU usage, and drastically slows down the API response times for users.
+
+### 3. Read vs Write Queries
+**Query Behavior (Change Tracking):**
+When a `GET` endpoint fetches data using standard Entity Framework Core methods (like `ToListAsync()`), EF Core places those entities into its Change Tracker. This requires extra memory and CPU cycles as EF Core takes a snapshot of the data to watch for modifications. When we use `.AsNoTracking()`, EF Core bypasses the Change Tracker entirely. The query executes faster and consumes less memory because EF Core simply returns the data and forgets about it.
+
+**Silent Data Loss Bug Scenario:**
+Using the wrong setting on a write operation can cause silent bugs. For example, consider an update scenario (`PUT /api/jobs/{id}`) where we fetch the existing job listing using `.AsNoTracking()`. If we then modify the properties of that detached entity and call `SaveChangesAsync()`, EF Core will *not* save the changes because the Change Tracker isn't watching the entity. The update will appear to succeed (no exception is thrown), but the new data will silently fail to write to the database, resulting in data loss.
