@@ -21,6 +21,16 @@ public class JobListingService : IJobListingService
         return await _jobRepository.GetActiveListingsAsync();
     }
 
+    public async Task<IEnumerable<JobResponse>> SearchAsync(string searchTerm)
+    {
+        return await _jobRepository.SearchAsync(searchTerm);
+    }
+
+    public async Task<IEnumerable<JobListingStatsResponse>> GetCompanyStatsAsync(Guid companyId)
+    {
+        return await _jobRepository.GetApplicationStatsAsync(companyId);
+    }
+
     public async Task<JobDetailResponse> GetListingWithDetailsAsync(Guid id)
     {
         var listing = await _jobRepository.GetListingWithDetailsAsync(id);

@@ -56,6 +56,67 @@ public class JobListingRepository : IJobListingRepository
         });
     }
 
+    public async Task<IEnumerable<JobResponse>> SearchAsync(string searchTerm)
+    {
+        var jobsData = await _context.JobListings
+            .AsNoTracking()
+            .Where(j => j.IsActive && j.ClosingDate > DateTime.UtcNow && j.SearchVector!.Matches(EF.Functions.ToTsQuery("english", searchTerm)))
+            .Select(j => new 
+            {
+                j.Id,
+                j.Title,
+                CompanyName = j.Company.Name,
+                j.Location,
+                j.Description,
+                j.Type,
+                j.PostedAt,
+                j.SalaryMin,
+                j.SalaryMax,
+                ApplicationCount = j.Applications.Count
+            })
+            .ToListAsync();
+
+        return jobsData.Select(j => 
+        {
+            string salaryDisplay = "Salary not specified";
+            if (j.SalaryMin.HasValue && j.SalaryMax.HasValue)
+                salaryDisplay = $"R{j.SalaryMin:N0} - R{j.SalaryMax:N0}/month";
+            else if (j.SalaryMin.HasValue)
+                salaryDisplay = $"From R{j.SalaryMin:N0}/month";
+
+            return new JobResponse(
+                j.Id,
+                j.Title,
+                j.CompanyName,
+                j.Location,
+                j.Description,
+                j.Type,
+                j.PostedAt,
+                salaryDisplay,
+                j.ApplicationCount
+            );
+        });
+    }
+
+    public async Task<IEnumerable<JobListingStatsResponse>> GetApplicationStatsAsync(Guid companyId)
+    {
+        return await _context.Database.SqlQuery<JobListingStatsResponse>($@"
+            SELECT 
+                jl.""Id"" AS ""JobListingId"",
+                jl.""Title"",
+                COUNT(a.""ApplicantId"")::int AS ""TotalApplications"",
+                COUNT(a.""ApplicantId"") FILTER (WHERE a.""Status"" = 'Interviewing')::int AS ""InterviewingCount"",
+                COUNT(a.""ApplicantId"") FILTER (WHERE a.""Status"" = 'Rejected')::int AS ""RejectedCount"",
+                COUNT(a.""ApplicantId"") FILTER (WHERE a.""Status"" = 'Offered')::int AS ""OfferedCount"",
+                RANK() OVER (ORDER BY COUNT(a.""ApplicantId"") DESC)::int AS ""Rank""
+            FROM job_listings jl
+            LEFT JOIN applications a ON jl.""Id"" = a.""JobListingId""
+            WHERE jl.""CompanyId"" = {companyId}
+            GROUP BY jl.""Id"", jl.""Title""
+            ORDER BY ""Rank""
+        ").ToListAsync();
+    }
+
     public async Task<JobDetailResponse?> GetListingWithDetailsAsync(Guid id)
     {
         var jobData = await _context.JobListings
@@ -103,9 +164,13 @@ public class JobListingRepository : IJobListingRepository
         );
     }
 
+    private static readonly Func<CareerHubDbContext, Guid, Task<JobListing?>> GetListingByIdCompiledQuery =
+        EF.CompileAsyncQuery((CareerHubDbContext context, Guid id) =>
+            context.JobListings.FirstOrDefault(j => j.Id == id));
+
     public async Task<JobListing?> GetListingByIdAsync(Guid id)
     {
-        return await _context.JobListings.FindAsync(id);
+        return await GetListingByIdCompiledQuery(_context, id);
     }
 
     public async Task<bool> IsOpenForApplicationsAsync(Guid id)

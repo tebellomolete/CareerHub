@@ -6,6 +6,8 @@ namespace CareerHub.Api.Repositories;
 public interface IJobListingRepository
 {
     Task<IEnumerable<JobResponse>> GetActiveListingsAsync();
+    Task<IEnumerable<JobResponse>> SearchAsync(string searchTerm);
+    Task<IEnumerable<JobListingStatsResponse>> GetApplicationStatsAsync(Guid companyId);
     Task<JobDetailResponse?> GetListingWithDetailsAsync(Guid id);
     Task<JobListing?> GetListingByIdAsync(Guid id);
     Task<bool> IsOpenForApplicationsAsync(Guid id);

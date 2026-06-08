@@ -13,10 +13,13 @@ public class ApplicationRepository : IApplicationRepository
         _context = context;
     }
 
+    private static readonly Func<CareerHubDbContext, Guid, Guid, Task<bool>> HasAppliedCompiledQuery =
+        EF.CompileAsyncQuery((CareerHubDbContext context, Guid applicantId, Guid listingId) =>
+            context.Applications.Any(a => a.ApplicantId == applicantId && a.JobListingId == listingId));
+
     public async Task<bool> HasApplicantAppliedAsync(Guid applicantId, Guid listingId)
     {
-        return await _context.Applications
-            .AnyAsync(a => a.ApplicantId == applicantId && a.JobListingId == listingId);
+        return await HasAppliedCompiledQuery(_context, applicantId, listingId);
     }
 
     public async Task<IEnumerable<Application>> GetApplicationsForListingAsync(Guid listingId)

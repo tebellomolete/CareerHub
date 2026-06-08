@@ -23,11 +23,21 @@ public class JobsController : ControllerBase
         return Ok(response);
     }
 
+    [HttpGet("search")]
+    public async Task<IActionResult> Search([FromQuery(Name = "q")] string term) => Ok(await _jobService.SearchAsync(term));
+
     [HttpGet("{id}")]
     public async Task<IActionResult> GetJobById(Guid id)
     {
         var response = await _jobService.GetListingWithDetailsAsync(id);
         return Ok(response);
+    }
+
+    [HttpGet("company/{companyId:guid}/stats")]
+    public async Task<ActionResult<IEnumerable<JobListingStatsResponse>>> GetCompanyStats(Guid companyId)
+    {
+        var stats = await _jobService.GetCompanyStatsAsync(companyId);
+        return Ok(stats);
     }
 
     [HttpPost]
