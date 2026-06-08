@@ -17,5 +17,6 @@ public class JobListing
 
     // Server-owned fields initialized automatically upon creation
     public DateTime PostedAt { get; set; } = DateTime.UtcNow;
+    public DateTime ClosingDate { get; set; }
     public bool IsActive { get; set; } = true;
 }

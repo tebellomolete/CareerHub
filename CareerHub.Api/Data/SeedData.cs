@@ -95,6 +95,7 @@ public static class SeedData
                 SalaryMin = 120000, 
                 SalaryMax = 160000, 
                 PostedAt = DateTime.UtcNow.AddDays(-10), 
+                ClosingDate = DateTime.UtcNow.AddDays(20),
                 IsActive = true 
             },
             new JobListing 
@@ -108,6 +109,7 @@ public static class SeedData
                 SalaryMin = 100000, 
                 SalaryMax = 140000, 
                 PostedAt = DateTime.UtcNow.AddDays(-5), 
+                ClosingDate = DateTime.UtcNow.AddDays(25),
                 IsActive = true 
             },
             new JobListing 
@@ -121,6 +123,7 @@ public static class SeedData
                 SalaryMin = 80000, 
                 SalaryMax = 110000, 
                 PostedAt = DateTime.UtcNow.AddDays(-2), 
+                ClosingDate = DateTime.UtcNow.AddDays(28),
                 IsActive = true 
             },
             new JobListing 
@@ -134,6 +137,7 @@ public static class SeedData
                 SalaryMin = 90000, 
                 SalaryMax = 130000, 
                 PostedAt = DateTime.UtcNow.AddDays(-15), 
+                ClosingDate = DateTime.UtcNow.AddDays(15),
                 IsActive = true 
             }
         };

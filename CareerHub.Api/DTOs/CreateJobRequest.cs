@@ -22,6 +22,9 @@ public record CreateJobRequest : IValidatableObject
     [Required] 
     public JobType Type { get; init; }
 
+    [Required]
+    public DateTime ClosingDate { get; init; }
+
     [Range(1, int.MaxValue, ErrorMessage = "Salary minimum must be greater than zero.")] 
     public int? SalaryMin { get; init; } = null;
 
