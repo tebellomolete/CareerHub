@@ -10,7 +10,9 @@ public static class SeedData
 {
     public static async Task SeedAsync(CareerHubDbContext db)
     {
-        if (await db.Companies.AnyAsync()) return;
+        try
+        {
+            if (await db.Companies.AnyAsync()) return;
 
         // ── Companies ──────────────────────────────────────
         // We initialize a set of professional companies spanning various industries.
@@ -75,72 +77,68 @@ public static class SeedData
         
         await db.Applicants.AddRangeAsync(applicants);
 
-        // ── JobListings ──────────────────────────────────────
-        // Creating job listings that belong to the companies seeded above.
-        var job1Id = Guid.NewGuid();
-        var job2Id = Guid.NewGuid();
-        var job3Id = Guid.NewGuid();
-        var job4Id = Guid.NewGuid();
+        var company4Id = Guid.NewGuid();
+        var company5Id = Guid.NewGuid();
 
-        var jobListings = new List<JobListing>
+        var moreCompanies = new List<Company>
         {
-            new JobListing 
-            { 
-                Id = job1Id, 
-                CompanyId = company1Id, 
-                Title = "Senior Backend Engineer", 
-                Description = "Looking for an experienced engineer to build scalable APIs.", 
-                Location = "Remote", 
-                Type = JobType.FullTime, 
-                SalaryMin = 120000, 
-                SalaryMax = 160000, 
-                PostedAt = DateTime.UtcNow.AddDays(-10), 
-                ClosingDate = DateTime.UtcNow.AddDays(20),
-                IsActive = true 
-            },
-            new JobListing 
-            { 
-                Id = job2Id, 
-                CompanyId = company1Id, 
-                Title = "Frontend Developer", 
-                Description = "Join us to craft beautiful user interfaces using React.", 
-                Location = "San Francisco, CA", 
-                Type = JobType.FullTime, 
-                SalaryMin = 100000, 
-                SalaryMax = 140000, 
-                PostedAt = DateTime.UtcNow.AddDays(-5), 
-                ClosingDate = DateTime.UtcNow.AddDays(25),
-                IsActive = true 
-            },
-            new JobListing 
-            { 
-                Id = job3Id, 
-                CompanyId = company2Id, 
-                Title = "Financial Analyst", 
-                Description = "Analyze market trends and assist with strategic planning.", 
-                Location = "New York, NY", 
-                Type = JobType.FullTime, 
-                SalaryMin = 80000, 
-                SalaryMax = 110000, 
-                PostedAt = DateTime.UtcNow.AddDays(-2), 
-                ClosingDate = DateTime.UtcNow.AddDays(28),
-                IsActive = true 
-            },
-            new JobListing 
-            { 
-                Id = job4Id, 
-                CompanyId = company3Id, 
-                Title = "Sustainability Consultant", 
-                Description = "Help our clients transition to renewable energy sources.", 
-                Location = "Austin, TX", 
-                Type = JobType.Contract, 
-                SalaryMin = 90000, 
-                SalaryMax = 130000, 
-                PostedAt = DateTime.UtcNow.AddDays(-15), 
-                ClosingDate = DateTime.UtcNow.AddDays(15),
-                IsActive = true 
-            }
+            new Company { Id = company4Id, Name = "DataFlow Inc", Industry = "Data Analytics", Website = "https://dataflow.example.com" },
+            new Company { Id = company5Id, Name = "HealthPlus", Industry = "Healthcare", Website = "https://healthplus.example.com" }
         };
+        await db.Companies.AddRangeAsync(moreCompanies);
+
+        // ── JobListings ──────────────────────────────────────
+        var jobListings = new List<JobListing>();
+        var random = new Random(42); // Seed for consistency
+        var companyIds = new[] { company1Id, company2Id, company3Id, company4Id, company5Id };
+        var titles = new[] { "Engineer", "Developer", "Analyst", "Consultant", "Manager", "Designer", "Architect", "Specialist" };
+        var adjectives = new[] { "Senior", "Junior", "Lead", "Principal", "Staff", "Frontend", "Backend", "Fullstack", "Data", "Cloud" };
+        var searchTerms = new[] { "sprint", "sprinting", "agile", "react", "cloud", "aws", "azure", "docker" };
+
+        for (int i = 0; i < 200; i++)
+        {
+            var cid = companyIds[random.Next(companyIds.Length)];
+            var title = $"{adjectives[random.Next(adjectives.Length)]} {titles[random.Next(titles.Length)]} {i}";
+            
+            // Add search terms to some descriptions
+            var description = $"Looking for an experienced professional to join our team. We value {searchTerms[random.Next(searchTerms.Length)]} experience.";
+            
+            var isActive = random.Next(10) > 2; // 70% active
+            var daysPosted = random.Next(1, 30);
+            var daysClosing = random.Next(-5, 30); // Some might be closed by date
+
+            // Ensure ClosingDate > PostedAt
+            var posted = DateTime.UtcNow.AddDays(-daysPosted);
+            var closing = DateTime.UtcNow.AddDays(daysClosing);
+            if (closing <= posted)
+            {
+                closing = posted.AddDays(random.Next(1, 30));
+            }
+
+            jobListings.Add(new JobListing
+            {
+                Id = Guid.NewGuid(),
+                CompanyId = cid,
+                Title = title,
+                Description = description,
+                Location = "Remote",
+                Type = JobType.FullTime,
+                SalaryMin = 80000 + random.Next(0, 40) * 1000,
+                SalaryMax = 130000 + random.Next(0, 40) * 1000,
+                PostedAt = posted,
+                ClosingDate = closing,
+                IsActive = isActive
+            });
+        }
+        
+        // Ensure at least 3 exact matches for "sprint"
+        jobListings[0].Description = "We do a lot of sprint planning.";
+        jobListings[1].Title = "Sprint Master";
+        jobListings[2].Description = "You will be responsible for the sprint.";
+
+        // And some for "sprinting"
+        jobListings[3].Description = "We are sprinting towards our goal.";
+        jobListings[4].Title = "Sprinting expert";
         
         await db.JobListings.AddRangeAsync(jobListings);
 
@@ -151,35 +149,35 @@ public static class SeedData
             new Application 
             { 
                 ApplicantId = applicant1Id, 
-                JobListingId = job1Id, 
+                JobListingId = jobListings[0].Id, 
                 SubmittedAt = DateTime.UtcNow.AddDays(-8), 
                 Status = ApplicationStatus.Interviewing 
             },
             new Application 
             { 
                 ApplicantId = applicant1Id, 
-                JobListingId = job2Id, 
+                JobListingId = jobListings[1].Id, 
                 SubmittedAt = DateTime.UtcNow.AddDays(-3), 
                 Status = ApplicationStatus.Submitted 
             },
             new Application 
             { 
                 ApplicantId = applicant2Id, 
-                JobListingId = job3Id, 
+                JobListingId = jobListings[2].Id, 
                 SubmittedAt = DateTime.UtcNow.AddDays(-1), 
                 Status = ApplicationStatus.UnderReview 
             },
             new Application 
             { 
                 ApplicantId = applicant3Id, 
-                JobListingId = job1Id, 
+                JobListingId = jobListings[0].Id, 
                 SubmittedAt = DateTime.UtcNow.AddDays(-9), 
                 Status = ApplicationStatus.Rejected 
             },
             new Application 
             { 
                 ApplicantId = applicant3Id, 
-                JobListingId = job4Id, 
+                JobListingId = jobListings[3].Id, 
                 SubmittedAt = DateTime.UtcNow.AddDays(-12), 
                 Status = ApplicationStatus.Offered 
             }
@@ -188,5 +186,12 @@ public static class SeedData
         await db.Applications.AddRangeAsync(applications);
 
         await db.SaveChangesAsync();
+        Console.WriteLine("Seed completed successfully");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SEED ERROR: {ex}");
+            throw;
+        }
     }
 }
