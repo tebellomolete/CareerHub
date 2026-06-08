@@ -36,7 +36,8 @@ try
         options.ValidateOnBuild = true;
     });
 
-    builder.Services.AddCareerHubRepositories();
+    // DI Registration - Uses custom extension methods
+    builder.Services.AddCareerHubRepositories(builder.Configuration);
     builder.Services.AddCareerHubServices();
 
     builder.Services.AddControllers()
