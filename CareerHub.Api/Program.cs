@@ -86,6 +86,23 @@ try
     // 
     //════════════════════════════════════════════════════ 
     var app = builder.Build();
+
+    // Seed Data
+    using (var scope = app.Services.CreateScope())
+    {
+        var services = scope.ServiceProvider;
+        try
+        {
+            var context = services.GetRequiredService<CareerHubDbContext>();
+            await context.Database.MigrateAsync();
+            await SeedData.SeedAsync(context);
+        }
+        catch (Exception ex)
+        {
+            Log.Error(ex, "An error occurred while seeding the database.");
+        }
+    }
+
     // 
     //════════════════════════════════════════════════════ 
     // PIPELINE — Configure the middleware chain. 
