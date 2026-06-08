@@ -111,3 +111,30 @@ When a `GET` endpoint fetches data using standard Entity Framework Core methods 
 
 **Silent Data Loss Bug Scenario:**
 Using the wrong setting on a write operation can cause silent bugs. For example, consider an update scenario (`PUT /api/jobs/{id}`) where we fetch the existing job listing using `.AsNoTracking()`. If we then modify the properties of that detached entity and call `SaveChangesAsync()`, EF Core will *not* save the changes because the Change Tracker isn't watching the entity. The update will appear to succeed (no exception is thrown), but the new data will silently fail to write to the database, resulting in data loss.
+
+---
+
+## Part 6: Architecture, DI & Repository Pattern
+
+### 1. Repository Design Decisions
+I chose to implement separate repositories (`IJobListingRepository`, `ICompanyRepository`, `IApplicantRepository`, and `IApplicationRepository`) rather than combining them into a single massive generic repository. 
+- **Boundary Decision**: The `ApplicationService` needs to validate that a `JobListing` exists and is open before creating an application. It relies on the `IJobListingRepository.IsOpenForApplicationsAsync` method for this validation query. 
+- **Company Validation**: I created a specific `ICompanyRepository` containing just an `ExistsAsync` method. This handles the company-related validation query needed by `JobListingService` cleanly. It is sufficient because the application only needs to know if the company exists before creating a job; it doesn't currently edit company data.
+
+### 2. What the Controller Lost
+During this refactor, the controllers shed all business and persistence responsibilities:
+- **EF Core Dependencies**: Removed all `DbContext`, `AnyAsync()`, `FindAsync()`, and `Include()` logic. This belongs in the **Repository Layer**, abstracting database implementations away from the controllers.
+- **Business Rule Validations**: Removed manual if-statements checking for duplicate jobs or duplicate applications. This logic moved to the **Service Layer**, allowing it to be reused elsewhere without an HTTP context.
+- **Error Formatting**: Removed manual HTTP error responses (like `return BadRequest()`). This is now handled entirely by custom typed exceptions intercepted by the **GlobalExceptionHandler Middleware**.
+- **Model Construction**: Removed the instantiation of domain entities (e.g. `new JobListing { ... }`). The **Service Layer** now owns building and manipulating entities before sending them to the repository.
+
+### 3. Status Transition Design
+Valid status transitions are encoded using a `static readonly Dictionary<ApplicationStatus, HashSet<ApplicationStatus>> ValidTransitions` inside the `ApplicationService`.
+- **Why this mechanism**: A dictionary provides an explicit graph of allowed movements in memory with O(1) lookup time.
+- **Future Changes**: Adding a new valid transition (like `Offered` -> `Accepted`) only requires adding `"Accepted"` to the `HashSet` inside the single `Offered` dictionary key. We do not need to modify long, nested switch statements or if/else chains elsewhere.
+
+### 4. Lifetime Misconfiguration
+When I deliberately registered `IJobListingService` as a `Singleton` while it depended on the `Scoped` `IJobListingRepository`, the .NET DI Container halted startup with this exact error message:
+`Cannot consume scoped service 'CareerHub.Api.Repositories.IJobListingRepository' from singleton 'CareerHub.Api.Services.IJobListingService'.`
+- **Why it's blocked**: A `Scoped` service is tied to a specific HTTP request, meaning it lives and dies with that request to guarantee a safe database transaction. A `Singleton` service is created once and lives forever. If a Singleton were allowed to hold a Scoped dependency (a Captive Dependency), the repository (and its DbContext connection) would be kept alive forever instead of being disposed of after the HTTP request. 
+- **Runtime consequence**: At runtime, this captive DbContext would become a massive single point of failure. It would accumulate change tracker memory leading to memory leaks, and concurrent requests would attempt to use the exact same database connection simultaneously, causing threading crashes and database lock-ups.
