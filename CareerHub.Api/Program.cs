@@ -7,6 +7,7 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
+using CareerHub.Api.Infrastructure;
 
 
 // 
@@ -29,6 +30,15 @@ try
     // BUILDER — Register services 
     // 
     //════════════════════════════════════════════════════ 
+    builder.Host.UseDefaultServiceProvider((context, options) =>
+    {
+        options.ValidateScopes = true;
+        options.ValidateOnBuild = true;
+    });
+
+    builder.Services.AddCareerHubRepositories();
+    builder.Services.AddCareerHubServices();
+
     builder.Services.AddControllers()
         .AddJsonOptions(options =>
         {
