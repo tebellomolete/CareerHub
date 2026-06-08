@@ -49,6 +49,14 @@ public class CareerHubDbContext(DbContextOptions<CareerHubDbContext> options) : 
                   .WithMany(j => j.Applications)
                   .HasForeignKey(e => e.JobListingId)
                   .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.JobListingId)
+                  .HasDatabaseName("ix_applications_joblistingid");
+
+            entity.HasIndex(e => new { e.ApplicantId, e.JobListingId })
+                  .HasDatabaseName("ix_applications_applicantid_joblistingid");
+                  
+            entity.HasCheckConstraint("ck_applications_submitted_not_future", "\"SubmittedAt\" <= now()");
         });
 
         modelBuilder.Entity<JobListing>(entity =>
@@ -68,6 +76,24 @@ public class CareerHubDbContext(DbContextOptions<CareerHubDbContext> options) : 
                   .OnDelete(DeleteBehavior.Restrict);
 
             entity.HasIndex(e => new { e.Title, e.CompanyId }).IsUnique();
+
+            entity.HasIndex(e => new { e.IsActive, e.ClosingDate })
+                  .HasDatabaseName("ix_job_listings_isactive_closingdate");
+
+            entity.HasIndex(e => new { e.CompanyId, e.IsActive })
+                  .HasDatabaseName("ix_job_listings_companyid_isactive");
+
+            entity.HasGeneratedTsVectorColumn(
+                p => p.SearchVector,
+                "english",
+                p => new { p.Title, p.Description })
+                .HasIndex(p => p.SearchVector)
+                .HasMethod("GIN")
+                .HasDatabaseName("ix_job_listings_search_vector");
+
+            entity.HasCheckConstraint("ck_joblistings_salarymin", "\"SalaryMin\" > 0");
+            entity.HasCheckConstraint("ck_joblistings_salarymax", "\"SalaryMax\" > \"SalaryMin\"");
+            entity.HasCheckConstraint("ck_joblistings_expiresaftercreated", "\"ClosingDate\" > \"PostedAt\"");
         });
     }
 }
