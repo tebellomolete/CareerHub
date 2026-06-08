@@ -19,4 +19,5 @@ public class JobListing
     public DateTime PostedAt { get; set; } = DateTime.UtcNow;
     public DateTime ClosingDate { get; set; }
     public bool IsActive { get; set; } = true;
+    public NpgsqlTypes.NpgsqlTsVector? SearchVector { get; set; }
 }
