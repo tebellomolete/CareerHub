@@ -20,7 +20,13 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger): IEx
        var statusCode = exception switch
        {
            JobNotFoundException => StatusCodes.Status404NotFound,
+           CompanyNotFoundException => StatusCodes.Status404NotFound,
            DuplicateJobListingException => StatusCodes.Status409Conflict,
+           DuplicateApplicationException => StatusCodes.Status409Conflict,
+           UnauthorizedListingUpdateException => StatusCodes.Status403Forbidden,
+           UnauthorizedApplicationAccessException => StatusCodes.Status403Forbidden,
+           ListingClosedException => StatusCodes.Status400BadRequest,
+           InvalidStatusTransitionException => StatusCodes.Status400BadRequest,
            _ => StatusCodes.Status500InternalServerError       
        }; 
        //3. Construct Problem Details shape 
@@ -45,6 +51,8 @@ public class GlobalExceptionHandler(ILogger<GlobalExceptionHandler> logger): IEx
     //Helper method to get Problem details title
     private static string GetTitle(int statusCode) => statusCode switch
     {
+        StatusCodes.Status400BadRequest => "Bad Request",
+        StatusCodes.Status403Forbidden => "Forbidden",
         StatusCodes.Status404NotFound => "Resource Not Found",
         StatusCodes.Status409Conflict => "Resource Conflict", 
         _                             => "Internal server error"
