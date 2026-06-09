@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using CareerHub.Api.DTOs;
 using CareerHub.Api.Services;
+using CareerHub.Api.Models;
 
 [ApiController]
 [Route("api/jobs")]
