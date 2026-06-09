@@ -97,4 +97,14 @@ public class ApplicationService : IApplicationService
 
         await _applicationRepository.DeleteApplicationAsync(application);
     }
+
+    public async Task<ApplicationResponse?> GetApplicationAsync(Guid applicantId, Guid listingId)
+    {
+        var application = await _applicationRepository.GetApplicationAsync(applicantId, listingId);
+        if (application == null) return null;
+
+        var applicantName = application.Applicant?.Name ?? "Unknown";
+        
+        return new ApplicationResponse(applicantName, application.SubmittedAt, application.Status);
+    }
 }

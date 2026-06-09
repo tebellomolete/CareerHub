@@ -125,9 +125,19 @@ public class JobListingService : IJobListingService
 
     public async Task DeleteListingAsync(Guid id)
     {
-        var existingJob = await _jobRepository.GetListingByIdAsync(id);
-        if (existingJob == null) throw new JobNotFoundException(id);
+        var listing = await _jobRepository.GetListingByIdAsync(id);
+        if (listing == null) throw new ArgumentException("Listing not found.");
 
-        await _jobRepository.DeleteListingAsync(existingJob);
+        await _jobRepository.DeleteListingAsync(listing);
+    }
+
+    public async Task<PagedResponse<JobResponse>> GetActiveListingsPagedAsync(int page, int pageSize, JobListingFilterQuery filter)
+    {
+        return await _jobRepository.GetActiveListingsPagedAsync(page, pageSize, filter);
+    }
+
+    public async Task<JobResponse?> PatchAsync(Guid id, UpdateJobListingRequest request)
+    {
+        return await _jobRepository.PatchAsync(id, request);
     }
 }

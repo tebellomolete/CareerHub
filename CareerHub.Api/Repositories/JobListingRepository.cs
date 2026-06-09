@@ -202,4 +202,155 @@ public class JobListingRepository : IJobListingRepository
         _context.JobListings.Remove(listing);
         await _context.SaveChangesAsync();
     }
+
+    public async Task<PagedResponse<JobResponse>> GetActiveListingsPagedAsync(int page, int pageSize, JobListingFilterQuery filter)
+    {
+        var query = _context.JobListings
+            .AsNoTracking()
+            .Where(j => j.IsActive);
+
+        if (!string.IsNullOrWhiteSpace(filter.Location))
+            query = query.Where(j => EF.Functions.ILike(j.Location, $"%{filter.Location}%"));
+
+        if (!string.IsNullOrWhiteSpace(filter.EmploymentType))
+        {
+            if (Enum.TryParse<JobType>(filter.EmploymentType, true, out var jobType))
+            {
+                query = query.Where(j => j.Type == jobType);
+            }
+        }
+
+        if (filter.SalaryMin.HasValue)
+            query = query.Where(j => j.SalaryMin >= filter.SalaryMin.Value);
+
+        if (filter.SalaryMax.HasValue)
+            query = query.Where(j => j.SalaryMax <= filter.SalaryMax.Value);
+
+        if (filter.CompanyId.HasValue)
+            query = query.Where(j => j.CompanyId == filter.CompanyId.Value);
+
+        var totalCount = await query.CountAsync();
+
+        bool isDesc = string.Equals(filter.Dir, "asc", StringComparison.OrdinalIgnoreCase) ? false : true;
+
+        query = filter.Sort?.ToLowerInvariant() switch
+        {
+            "salarymin" => isDesc ? query.OrderByDescending(j => j.SalaryMin) : query.OrderBy(j => j.SalaryMin),
+            "salarymax" => isDesc ? query.OrderByDescending(j => j.SalaryMax) : query.OrderBy(j => j.SalaryMax),
+            "title" => isDesc ? query.OrderByDescending(j => j.Title) : query.OrderBy(j => j.Title),
+            _ => isDesc ? query.OrderByDescending(j => j.PostedAt) : query.OrderBy(j => j.PostedAt) // postedAt default
+        };
+
+        var jobsData = await query
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(j => new 
+            {
+                j.Id,
+                j.Title,
+                CompanyName = j.Company.Name,
+                j.Location,
+                j.Description,
+                j.Type,
+                j.PostedAt,
+                j.SalaryMin,
+                j.SalaryMax,
+                ApplicationCount = j.Applications.Count
+            })
+            .ToListAsync();
+
+        var data = jobsData.Select(j => 
+        {
+            string salaryDisplay = "Salary not specified";
+            if (j.SalaryMin.HasValue && j.SalaryMax.HasValue)
+                salaryDisplay = $"R{j.SalaryMin:N0} - R{j.SalaryMax:N0}/month";
+            else if (j.SalaryMin.HasValue)
+                salaryDisplay = $"From R{j.SalaryMin:N0}/month";
+
+            return new JobResponse(
+                j.Id,
+                j.Title,
+                j.CompanyName,
+                j.Location,
+                j.Description,
+                j.Type,
+                j.PostedAt,
+                salaryDisplay,
+                j.ApplicationCount
+            );
+        });
+
+        var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+        
+        return new PagedResponse<JobResponse>(
+            Data: data,
+            Page: page,
+            PageSize: pageSize,
+            TotalCount: totalCount,
+            TotalPages: totalPages,
+            HasNextPage: page < totalPages,
+            HasPreviousPage: page > 1
+        );
+    }
+
+    public async Task<JobResponse?> PatchAsync(Guid id, UpdateJobListingRequest request)
+    {
+        var listing = await _context.JobListings.Include(j => j.Company).FirstOrDefaultAsync(j => j.Id == id);
+        if (listing == null) return null;
+
+        if (request.Title != null) listing.Title = request.Title;
+        if (request.Description != null) listing.Description = request.Description;
+        if (request.Location != null) listing.Location = request.Location;
+        
+        if (request.EmploymentType != null)
+        {
+            if (Enum.TryParse<JobType>(request.EmploymentType, true, out var parsedType))
+            {
+                listing.Type = parsedType;
+            }
+        }
+
+        if (request.SalaryMin.HasValue || request.SalaryMax.HasValue)
+        {
+            var newMin = request.SalaryMin ?? listing.SalaryMin;
+            var newMax = request.SalaryMax ?? listing.SalaryMax;
+            
+            if (newMin.HasValue && newMax.HasValue && newMin.Value > newMax.Value)
+            {
+                throw new ArgumentException("SalaryMax must be greater than or equal to SalaryMin");
+            }
+            
+            if (request.SalaryMin.HasValue) listing.SalaryMin = request.SalaryMin.Value;
+            if (request.SalaryMax.HasValue) listing.SalaryMax = request.SalaryMax.Value;
+        }
+
+        if (request.ExpiresAt.HasValue)
+        {
+            if (request.ExpiresAt.Value <= listing.PostedAt)
+            {
+                throw new ArgumentException("ClosingDate must be after PostedAt");
+            }
+            listing.ClosingDate = request.ExpiresAt.Value;
+        }
+
+        await _context.SaveChangesAsync();
+        
+        string salaryDisplay = "Salary not specified";
+        if (listing.SalaryMin.HasValue && listing.SalaryMax.HasValue)
+            salaryDisplay = $"R{listing.SalaryMin:N0} - R{listing.SalaryMax:N0}/month";
+        else if (listing.SalaryMin.HasValue)
+            salaryDisplay = $"From R{listing.SalaryMin:N0}/month";
+
+        return new JobResponse(
+            listing.Id,
+            listing.Title,
+            listing.Company.Name,
+            listing.Location,
+            listing.Description,
+            listing.Type,
+            listing.PostedAt,
+            salaryDisplay,
+            listing.Applications?.Count ?? 0
+        );
+    }
 }

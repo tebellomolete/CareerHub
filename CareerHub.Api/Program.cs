@@ -5,6 +5,9 @@ using CareerHub.Api.Data;
 using System.Text.Json.Serialization;
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Asp.Versioning;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
 using CareerHub.Api.Infrastructure;
@@ -54,14 +57,77 @@ try
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>(); // Day 3 — typed handler
     builder.Services.AddProblemDetails();
 
+
+
+    builder.Services.AddRateLimiter(options =>
+    {
+        options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(httpContext =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+                factory: partition => new FixedWindowRateLimiterOptions
+                {
+                    AutoReplenishment = true,
+                    PermitLimit = 200,
+                    QueueLimit = 0,
+                    Window = TimeSpan.FromSeconds(60)
+                }));
+
+        options.AddSlidingWindowLimiter("search", opt =>
+        {
+            opt.PermitLimit = 30;
+            opt.QueueLimit = 0;
+            opt.Window = TimeSpan.FromSeconds(60);
+            opt.SegmentsPerWindow = 6;
+        });
+
+        options.AddFixedWindowLimiter("apply", opt =>
+        {
+            opt.PermitLimit = 5;
+            opt.QueueLimit = 0;
+            opt.Window = TimeSpan.FromMinutes(60);
+        });
+
+        options.AddFixedWindowLimiter("post-listing", opt =>
+        {
+            opt.PermitLimit = 10;
+            opt.QueueLimit = 0;
+            opt.Window = TimeSpan.FromMinutes(60);
+        });
+
+        options.OnRejected = async (context, token) =>
+        {
+            context.HttpContext.Response.StatusCode = 429;
+            if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+            {
+                context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString();
+                await context.HttpContext.Response.WriteAsync($"Rate limit exceeded. Please retry after {(int)retryAfter.TotalSeconds} seconds.", token);
+            }
+            else
+            {
+                await context.HttpContext.Response.WriteAsync("Rate limit exceeded. Please try again later.", token);
+            }
+        };
+    });
+
+    builder.Services.AddApiVersioning(options =>
+
+    {
+        options.DefaultApiVersion = new ApiVersion(1, 0);
+        options.AssumeDefaultVersionWhenUnspecified = true;
+        options.ReportApiVersions = true;
+    }).AddMvc();
+
     // Register CORS policy
+
     builder.Services.AddCors(options =>
     {
         options.AddPolicy("AllowNextJs", policy =>
         {
-            policy.WithOrigins("http://localhost:3000")
+            policy.WithOrigins("http://localhost:3000", "https://careerhub-production.com")
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials()
+                  .WithExposedHeaders("X-Total-Count");
         });
     });
 
@@ -122,6 +188,7 @@ try
     //════════════════════════════════════════════════════ 
     app.UseSerilogRequestLogging(); // Logs every HTTP request + final response automatically 
     app.UseCors("AllowNextJs");
+    app.UseRateLimiter();
     app.UseExceptionHandler();  // Activates GlobalExceptionHandler — catches all thrown exceptions 
     app.UseStatusCodePages();   // Fills empty 4xx/5xx responses with Problem Details body 
     app.UseAuthentication();
