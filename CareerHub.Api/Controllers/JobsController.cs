@@ -10,6 +10,7 @@ using CareerHub.Api.Models;
 
 [ApiController]
 [Route("api/v{version:apiVersion}/[controller]")]
+[Route("api/[controller]")]
 [ApiVersion(1)]
 public class JobsController : ControllerBase
 {
