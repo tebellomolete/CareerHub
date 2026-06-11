@@ -151,7 +151,7 @@ public static class SeedData
                 ApplicantId = applicant1Id, 
                 JobListingId = jobListings[0].Id, 
                 SubmittedAt = DateTime.UtcNow.AddDays(-8), 
-                Status = ApplicationStatus.Interviewing 
+                Status = ApplicationStatus.Shortlisted 
             },
             new Application 
             { 

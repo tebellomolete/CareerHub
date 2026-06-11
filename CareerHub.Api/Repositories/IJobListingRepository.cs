@@ -15,5 +15,4 @@ public interface IJobListingRepository
     Task AddListingAsync(JobListing listing);
     Task UpdateListingAsync(JobListing listing);
     Task DeleteListingAsync(JobListing listing);
-    Task<JobResponse?> PatchAsync(Guid id, UpdateJobListingRequest request);
 }

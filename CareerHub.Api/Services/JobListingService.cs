@@ -50,6 +50,11 @@ public class JobListingService : IJobListingService
             throw new ArgumentException("Closing date must be in the future.");
         }
 
+        if (request.SalaryMin.HasValue && request.SalaryMax.HasValue && request.SalaryMin.Value > request.SalaryMax.Value)
+        {
+            throw new ArgumentException("SalaryMax must be greater than or equal to SalaryMin");
+        }
+
         var newJob = new JobListing
         {
             Id = Guid.NewGuid(),
@@ -138,6 +143,58 @@ public class JobListingService : IJobListingService
 
     public async Task<JobResponse?> PatchAsync(Guid id, UpdateJobListingRequest request)
     {
-        return await _jobRepository.PatchAsync(id, request);
+        var listing = await _jobRepository.GetListingByIdAsync(id);
+        if (listing == null) throw new JobNotFoundException(id);
+
+        if (request.Title != null) listing.Title = request.Title;
+        if (request.Description != null) listing.Description = request.Description;
+        if (request.Location != null) listing.Location = request.Location;
+        
+        if (request.EmploymentType != null)
+        {
+            if (Enum.TryParse<JobType>(request.EmploymentType, true, out var parsedType))
+            {
+                listing.Type = parsedType;
+            }
+        }
+
+        if (request.SalaryMin.HasValue || request.SalaryMax.HasValue)
+        {
+            var newMin = request.SalaryMin ?? listing.SalaryMin;
+            var newMax = request.SalaryMax ?? listing.SalaryMax;
+            
+            if (newMin.HasValue && newMax.HasValue && newMin.Value > newMax.Value)
+            {
+                throw new ArgumentException("SalaryMax must be greater than or equal to SalaryMin");
+            }
+            
+            if (request.SalaryMin.HasValue) listing.SalaryMin = request.SalaryMin.Value;
+            if (request.SalaryMax.HasValue) listing.SalaryMax = request.SalaryMax.Value;
+        }
+
+        if (request.ExpiresAt.HasValue)
+        {
+            if (request.ExpiresAt.Value <= listing.PostedAt)
+            {
+                throw new ArgumentException("ClosingDate must be after PostedAt");
+            }
+            listing.ClosingDate = request.ExpiresAt.Value;
+        }
+
+        await _jobRepository.UpdateListingAsync(listing);
+        
+        var detail = await _jobRepository.GetListingWithDetailsAsync(listing.Id);
+        
+        return new JobResponse(
+            detail!.Id,
+            detail.Title,
+            detail.CompanyName,
+            detail.Location,
+            detail.Description,
+            detail.Type,
+            detail.PostedAt,
+            detail.SalaryDisplay,
+            detail.ApplicationCount
+        );
     }
 }

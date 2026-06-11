@@ -14,8 +14,8 @@ public class ApplicationService : IApplicationService
     private static readonly Dictionary<ApplicationStatus, HashSet<ApplicationStatus>> ValidTransitions = new()
     {
         { ApplicationStatus.Submitted, new HashSet<ApplicationStatus> { ApplicationStatus.UnderReview } },
-        { ApplicationStatus.UnderReview, new HashSet<ApplicationStatus> { ApplicationStatus.Interviewing, ApplicationStatus.Rejected } },
-        { ApplicationStatus.Interviewing, new HashSet<ApplicationStatus> { ApplicationStatus.Offered, ApplicationStatus.Rejected } },
+        { ApplicationStatus.UnderReview, new HashSet<ApplicationStatus> { ApplicationStatus.Shortlisted, ApplicationStatus.Rejected } },
+        { ApplicationStatus.Shortlisted, new HashSet<ApplicationStatus> { ApplicationStatus.Offered, ApplicationStatus.Rejected } },
         { ApplicationStatus.Offered, new HashSet<ApplicationStatus> { ApplicationStatus.Hired, ApplicationStatus.Rejected } },
         { ApplicationStatus.Hired, new HashSet<ApplicationStatus>() },
         { ApplicationStatus.Rejected, new HashSet<ApplicationStatus>() }

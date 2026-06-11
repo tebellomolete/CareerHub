@@ -105,7 +105,7 @@ public class JobListingRepository : IJobListingRepository
                 jl.""Id"" AS ""JobListingId"",
                 jl.""Title"",
                 COUNT(a.""ApplicantId"")::int AS ""TotalApplications"",
-                COUNT(a.""ApplicantId"") FILTER (WHERE a.""Status"" = 'Interviewing')::int AS ""InterviewingCount"",
+                COUNT(a.""ApplicantId"") FILTER (WHERE a.""Status"" = 'Shortlisted')::int AS ""ShortlistedCount"",
                 COUNT(a.""ApplicantId"") FILTER (WHERE a.""Status"" = 'Rejected')::int AS ""RejectedCount"",
                 COUNT(a.""ApplicantId"") FILTER (WHERE a.""Status"" = 'Offered')::int AS ""OfferedCount"",
                 RANK() OVER (ORDER BY COUNT(a.""ApplicantId"") DESC)::int AS ""Rank""
@@ -293,64 +293,5 @@ public class JobListingRepository : IJobListingRepository
         );
     }
 
-    public async Task<JobResponse?> PatchAsync(Guid id, UpdateJobListingRequest request)
-    {
-        var listing = await _context.JobListings.Include(j => j.Company).FirstOrDefaultAsync(j => j.Id == id);
-        if (listing == null) return null;
 
-        if (request.Title != null) listing.Title = request.Title;
-        if (request.Description != null) listing.Description = request.Description;
-        if (request.Location != null) listing.Location = request.Location;
-        
-        if (request.EmploymentType != null)
-        {
-            if (Enum.TryParse<JobType>(request.EmploymentType, true, out var parsedType))
-            {
-                listing.Type = parsedType;
-            }
-        }
-
-        if (request.SalaryMin.HasValue || request.SalaryMax.HasValue)
-        {
-            var newMin = request.SalaryMin ?? listing.SalaryMin;
-            var newMax = request.SalaryMax ?? listing.SalaryMax;
-            
-            if (newMin.HasValue && newMax.HasValue && newMin.Value > newMax.Value)
-            {
-                throw new ArgumentException("SalaryMax must be greater than or equal to SalaryMin");
-            }
-            
-            if (request.SalaryMin.HasValue) listing.SalaryMin = request.SalaryMin.Value;
-            if (request.SalaryMax.HasValue) listing.SalaryMax = request.SalaryMax.Value;
-        }
-
-        if (request.ExpiresAt.HasValue)
-        {
-            if (request.ExpiresAt.Value <= listing.PostedAt)
-            {
-                throw new ArgumentException("ClosingDate must be after PostedAt");
-            }
-            listing.ClosingDate = request.ExpiresAt.Value;
-        }
-
-        await _context.SaveChangesAsync();
-        
-        string salaryDisplay = "Salary not specified";
-        if (listing.SalaryMin.HasValue && listing.SalaryMax.HasValue)
-            salaryDisplay = $"R{listing.SalaryMin:N0} - R{listing.SalaryMax:N0}/month";
-        else if (listing.SalaryMin.HasValue)
-            salaryDisplay = $"From R{listing.SalaryMin:N0}/month";
-
-        return new JobResponse(
-            listing.Id,
-            listing.Title,
-            listing.Company.Name,
-            listing.Location,
-            listing.Description,
-            listing.Type,
-            listing.PostedAt,
-            salaryDisplay,
-            listing.Applications?.Count ?? 0
-        );
-    }
 }
