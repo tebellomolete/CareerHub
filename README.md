@@ -166,3 +166,21 @@ In our rate limiting configuration, we use the client's IP address (`RemoteIpAdd
 ### 6. Connection Pooling
 **If your API container gets 500 requests per second, but your database only has 100 connections available, what happens to request 101? How does EF Core handle this?**
 When all 100 database connections are actively leased from the connection pool, request 101 will be queued by the connection pool manager. The application thread will wait asynchronously for a connection to be released back into the pool. If a connection is released within the configured timeout period, request 101 proceeds. If the timeout is reached before a connection becomes available, EF Core throws an `InvalidOperationException` (Timeout expired).
+
+## Part 8: Testing & CI/CD Pipelines
+
+### 1. The Test Pyramid
+**Why is it important to have more unit tests than integration/repository tests?**
+The test pyramid advocates for a large base of unit tests because they are fast, isolated, and cheap to run and maintain. They test business logic without needing heavy infrastructure. Integration and repository tests require spinning up external dependencies like databases or web servers, making them slower and more prone to flakiness. Having more unit tests ensures fast feedback during development while reserving the slower integration tests for verifying that the moving parts communicate correctly.
+
+### 2. Isolation
+**Why did we clear the database tables in `InitializeAsync` rather than just letting the data accumulate?**
+Test isolation ensures that the outcome of one test does not depend on the state left behind by another test. If we allowed data to accumulate, tests could pass or fail unpredictably depending on the execution order (e.g., a test asserting "TotalCount = 1" might fail because a previous test added 5 records). Clearing tables before each test guarantees a clean, predictable database state.
+
+### 3. CI/CD Concepts
+**What is the value of running tests automatically on every Pull Request?**
+Running tests automatically on a PR prevents broken code, regressions, or failing business rules from ever merging into the main branch. It provides immediate feedback to the developer and reviewers, acts as an automated safety net against human error, and ensures the codebase remains deployable and stable at all times.
+
+### 4. Provider Limitations
+**Why couldn't we just test the `FullTextSearchAsync` method using the SQLite in-memory provider? Why did we need Testcontainers with PostgreSQL?**
+The SQLite in-memory provider does not support PostgreSQL-specific features like `tsvector` and `GIN` indexes used for full-text search. If we tried to test this in SQLite, it would throw an exception because the SQL translation for full-text search is unique to PostgreSQL. Testcontainers allows us to test against a real, isolated PostgreSQL database container, ensuring our database-specific queries and constraints execute exactly as they will in production.
