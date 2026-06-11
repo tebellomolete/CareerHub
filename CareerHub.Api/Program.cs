@@ -211,3 +211,4 @@ finally
 {
     Log.CloseAndFlush(); //Ensure all buffered log entries are flushed before application exit. 
 }
+public partial class Program { }
