@@ -21,6 +21,11 @@ public class JobsController : ControllerBase
     }
 
     [HttpGet]
+    [EndpointSummary("List all jobs")]
+    [EndpointDescription(
+        "Returns a paginated list of jobs ordered by PostedAt. " +
+        "The X-Total-Count response header contains the total number of jobs " +
+        "matching the current filter, regardless of page size.")]
     public async Task<IActionResult> GetAllJobs([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] JobListingFilterQuery filter = null)
     {
         filter ??= new JobListingFilterQuery();
@@ -41,9 +46,19 @@ public class JobsController : ControllerBase
 
     [HttpGet("search")]
     [EnableRateLimiting("search")]
+    [EndpointSummary("Search jobs")]
+    [EndpointDescription(
+        "Filter jobs by full-text query. " +
+        "When Q is provided, PostgreSQL full-text search is used with GIN index support. " +
+        "Rate limited to 20 requests per minute — full-text queries are expensive.")]
     public async Task<IActionResult> Search([FromQuery(Name = "q")] string term) => Ok(await _jobService.SearchAsync(term));
 
     [HttpGet("{id}")]
+    [EndpointSummary("Get a job listing by id")]
+    [EndpointDescription(
+        "Returns a single job listing by id. " +
+        "Fingerprint from the fields most likely to change. " +
+        "If PostedAt or Salary change, the ETag changes and the client re-fetches.")]
     public async Task<IActionResult> GetJobById(Guid id)
     {
         var response = await _jobService.GetListingWithDetailsAsync(id);
@@ -87,6 +102,7 @@ public class JobsController : ControllerBase
 
     [HttpPatch("{id}")]
     [Authorize(Roles = "Employer")]
+    
     public async Task<IActionResult> PatchJob(Guid id, UpdateJobListingRequest request)
     {
         var response = await _jobService.PatchAsync(id, request);

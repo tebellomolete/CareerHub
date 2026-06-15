@@ -11,6 +11,9 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.EntityFrameworkCore;
 using CareerHub.Api.Infrastructure;
+using API.Infrastructure.OpenApi;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.ResponseCompression;
 
 
 // 
@@ -50,12 +53,35 @@ try
         });
     builder.Services.AddOpenApi();
 
+    builder.Services.AddScoped<BackgroundService>();
+
+    builder.Services.AddScoped<CareerHubDocumentTransformer>();
+    builder.Services.AddOpenApi(options =>
+    {
+        options.AddDocumentTransformer<CareerHubDocumentTransformer>();
+    });
+
     var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
     builder.Services.AddDbContext<CareerHubDbContext>(options =>
         options.UseNpgsql(connectionString));
 
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>(); // Day 3 — typed handler
     builder.Services.AddProblemDetails();
+
+    builder.Services.AddResponseCompression(options =>
+    {
+        options.EnableForHttps = true;
+        options.Providers.Add<BrotliCompressionProvider>();
+        options.Providers.Add<GzipCompressionProvider>();
+        options.MimeTypes = ResponseCompressionDefaults.MimeTypes
+            .Append("application/json");
+    });
+
+    builder.Services.AddHealthChecks()
+        .AddDbContextCheck<CareerHubDbContext>(
+            name: "database",
+            failureStatus: Microsoft.Extensions.Diagnostics.HealthChecks.HealthStatus.Unhealthy,
+            tags: ["ready"]);
 
 
 
@@ -200,6 +226,17 @@ try
     // Serves /openapi/v1.json 
     app.MapScalarApiReference();  // Serves the Scalar UI at /scalar/v1 
     app.MapControllers();  // Activates attribute routing for all [ApiController] classes 
+
+    app.MapHealthChecks("/health/live", new HealthCheckOptions
+    {
+        Predicate = _ => false
+    });
+
+    app.MapHealthChecks("/health/ready", new HealthCheckOptions
+    {
+        Predicate = check => check.Tags.Contains("ready")
+    });
+    
     app.Run();
 }
 catch (Exception ex)

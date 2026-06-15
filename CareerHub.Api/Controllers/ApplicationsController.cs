@@ -49,6 +49,11 @@ public class ApplicationsController : ControllerBase
 
     [HttpPatch("applications/{listingId}/applicants/{applicantId}/status")]
     [Authorize(Roles = "Employer")]
+    [EndpointSummary("Patch an applicatin status by id")]
+    [EndpointDescription(
+        "Legal status transitions are: " +
+        "    Submitted -> UnderReview -> Interviewing -> Offered -> Hired or Rejected " +
+        "An illigal status transition throws an InvalidStatusTransitionException.")]
     public async Task<IActionResult> UpdateApplicationStatus(Guid listingId, Guid applicantId, UpdateApplicationStatusRequest request)
     {
         try
