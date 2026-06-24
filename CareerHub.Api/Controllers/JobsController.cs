@@ -21,7 +21,7 @@ public class JobsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAllJobs([FromQuery] int page = 1, [FromQuery] int pageSize = 20, [FromQuery] JobListingFilterQuery filter = null)
+    public async Task<IActionResult> GetAllJobs([FromQuery] int page = 1, [FromQuery] int pageSize = 21, [FromQuery] JobListingFilterQuery filter = null)
     {
         filter ??= new JobListingFilterQuery();
         var response = await _jobService.GetActiveListingsPagedAsync(page, pageSize, filter);
