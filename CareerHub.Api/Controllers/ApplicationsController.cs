@@ -22,7 +22,7 @@ public class ApplicationsController : ControllerBase
 
     [HttpPost("jobs/{id}/applications")]
     [EnableRateLimiting("apply")]
-    [Authorize(Roles = "Applicant")]
+    // [Authorize(Roles = "Applicant")]
     public async Task<IActionResult> SubmitApplication(Guid id, SubmitApplicationRequest request)
     {
         await _applicationService.SubmitApplicationAsync(id, request);
