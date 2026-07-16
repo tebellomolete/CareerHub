@@ -95,14 +95,32 @@ public static class SeedData
         var adjectives = new[] { "Senior", "Junior", "Lead", "Principal", "Staff", "Frontend", "Backend", "Fullstack", "Data", "Cloud" };
         var searchTerms = new[] { "sprint", "sprinting", "agile", "react", "cloud", "aws", "azure", "docker" };
 
+        // Assignment 2.1 (mobile) — cities used to compose on-site and
+        // hybrid location strings so the Flutter Job.inferLocationType
+        // heuristic ("remote" / "hybrid" substring match) actually
+        // populates all three buckets of its Location dropdown.
+        var cities = new[] { "Cape Town, ZA", "Johannesburg, ZA", "Durban, ZA", "Pretoria, ZA", "Sandton, ZA" };
+
+        // Weighted employment-type pool. Roughly 50% Full-time, 20%
+        // Part-time, 20% Contract, 10% Internship — matches the four
+        // options on the Flutter Job Type dropdown and gives every
+        // option non-trivial data behind it.
+        var jobTypeWeights = new[]
+        {
+            JobType.FullTime,  JobType.FullTime,  JobType.FullTime,  JobType.FullTime,  JobType.FullTime,
+            JobType.PartTime,  JobType.PartTime,
+            JobType.Contract,  JobType.Contract,
+            JobType.Internship
+        };
+
         for (int i = 0; i < 200; i++)
         {
             var cid = companyIds[random.Next(companyIds.Length)];
             var title = $"{adjectives[random.Next(adjectives.Length)]} {titles[random.Next(titles.Length)]} {i}";
-            
+
             // Add search terms to some descriptions
             var description = $"Looking for an experienced professional to join our team. We value {searchTerms[random.Next(searchTerms.Length)]} experience.";
-            
+
             var isActive = random.Next(10) > 2; // 70% active
             var daysPosted = random.Next(1, 30);
             var daysClosing = random.Next(-5, 30); // Some might be closed by date
@@ -115,14 +133,35 @@ public static class SeedData
                 closing = posted.AddDays(random.Next(1, 30));
             }
 
+            // Location bucket — roughly 40% Remote, 30% Hybrid, 30% on-site.
+            // The Flutter heuristic matches on the literal substrings
+            // "remote" / "hybrid" (case-insensitive), so the exact
+            // formats below are what actually drive the mobile filter.
+            var bucket = random.Next(10);
+            string location;
+            if (bucket < 4)
+            {
+                location = "Remote";
+            }
+            else if (bucket < 7)
+            {
+                location = $"{cities[random.Next(cities.Length)]} (Hybrid)";
+            }
+            else
+            {
+                location = cities[random.Next(cities.Length)];
+            }
+
+            var jobType = jobTypeWeights[random.Next(jobTypeWeights.Length)];
+
             jobListings.Add(new JobListing
             {
                 Id = Guid.NewGuid(),
                 CompanyId = cid,
                 Title = title,
                 Description = description,
-                Location = "Remote",
-                Type = JobType.FullTime,
+                Location = location,
+                Type = jobType,
                 SalaryMin = 80000 + random.Next(0, 40) * 1000,
                 SalaryMax = 130000 + random.Next(0, 40) * 1000,
                 PostedAt = posted,

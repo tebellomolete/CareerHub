@@ -123,7 +123,11 @@ try
     {
         options.AddPolicy("AllowNextJs", policy =>
         {
-            policy.WithOrigins("http://localhost:3000", "https://careerhub-production.com")
+            policy.WithOrigins(
+                        "http://localhost:3000",           // Next.js dev server
+                        "http://localhost:8080",           // Flutter web dev server (--web-port=8080)
+                        "https://careerhub-production.com"
+                    )
                   .AllowAnyHeader()
                   .AllowAnyMethod()
                   .AllowCredentials()
