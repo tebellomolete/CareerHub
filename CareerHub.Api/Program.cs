@@ -42,6 +42,12 @@ try
     // DI Registration - Uses custom extension methods
     builder.Services.AddCareerHubRepositories(builder.Configuration);
     builder.Services.AddCareerHubServices();
+    // Assignment 2.4 — register the auth-adjacent services
+    // (user account store, refresh token store, token issuer,
+    // saved-jobs store). Kept in its own extension so the
+    // controller registration matches the intent visible in
+    // Program.cs.
+    builder.Services.AddCareerHubAuth();
 
     builder.Services.AddControllers()
         .AddJsonOptions(options =>
